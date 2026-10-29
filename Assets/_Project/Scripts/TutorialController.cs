@@ -25,6 +25,8 @@ public class TutorialController : MonoBehaviour
 
     Paso paso = Paso.SinGranja;
     Interactuable pizarra, pozo;
+    string pistaBase = "";
+    Coroutine aviso;
 
     void Awake() { Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
@@ -39,7 +41,7 @@ public class TutorialController : MonoBehaviour
     public void Registrar(Interactuable objeto)
     {
         if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) pizarra = objeto;
-        else pozo = objeto;
+        else if (objeto.TipoObjeto == Interactuable.Tipo.Pozo) pozo = objeto;
 
         if (pizarra == null || pozo == null) return;
 
@@ -55,7 +57,7 @@ public class TutorialController : MonoBehaviour
         {
             case Paso.BuscarPizarra:
                 if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) IrA(Paso.LeerNota);
-                else MostrarPista("Primero lee la pizarra de la casa, la que brilla.");
+                else Avisar("Primero lee la pizarra de la casa, la que brilla.");
                 break;
             case Paso.BuscarPozo:
                 if (objeto.TipoObjeto == Interactuable.Tipo.Pozo) IrA(Paso.Completo);
@@ -63,7 +65,6 @@ public class TutorialController : MonoBehaviour
                 break;
             case Paso.Completo:
                 if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) AbrirNota();
-                else MostrarPista("El pozo ya te dio la llave del huerto.");
                 break;
         }
     }
@@ -73,6 +74,21 @@ public class TutorialController : MonoBehaviour
     {
         panelNota.SetActive(false);
         if (paso == Paso.LeerNota) IrA(Paso.BuscarPozo);
+    }
+
+    // Mensaje temporal que luego vuelve a la pista del paso actual.
+    public void Avisar(string texto, float segundos = 3f)
+    {
+        if (aviso != null) StopCoroutine(aviso);
+        aviso = StartCoroutine(AvisoTemporal(texto, segundos));
+    }
+
+    IEnumerator AvisoTemporal(string texto, float segundos)
+    {
+        Escribir(texto);
+        yield return new WaitForSeconds(segundos);
+        Escribir(pistaBase);
+        aviso = null;
     }
 
     void IrA(Paso nuevo)
@@ -93,8 +109,10 @@ public class TutorialController : MonoBehaviour
                 MostrarPista("La nota habla del pozo. Acércate y tócalo.");
                 break;
             case Paso.Completo:
-                MostrarPista("¡Conseguiste la llave del huerto! Se desbloqueó tu panel.");
+                MostrarPista("");
+                Avisar("¡Conseguiste la llave del huerto! Se desbloqueó tu panel y las parcelas.", 5f);
                 Handheld.Vibrate();
+                if (EstadoJuego.Instance != null) EstadoJuego.Instance.DarLlave();
                 StartCoroutine(MostrarHud());
                 break;
         }
@@ -113,6 +131,12 @@ public class TutorialController : MonoBehaviour
     }
 
     void MostrarPista(string texto)
+    {
+        pistaBase = texto;
+        Escribir(texto);
+    }
+
+    void Escribir(string texto)
     {
         textoPista.text = texto;
         panelPista.SetActive(!string.IsNullOrEmpty(texto));
