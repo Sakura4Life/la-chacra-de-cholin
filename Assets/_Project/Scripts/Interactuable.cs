@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class Interactuable : MonoBehaviour
 {
-    public enum Tipo { Pizarra, Pozo, Parcela, Gallina, Caja }
+    public enum Tipo { Pizarra, Pozo, Parcela, Gallina, Caja, Pollito }
 
     [SerializeField] Tipo tipo;
     public Tipo TipoObjeto => tipo;
@@ -10,12 +10,14 @@ public class Interactuable : MonoBehaviour
     Resaltado resaltado;
     Parcela parcela;
     Gallina gallina;
+    Pollito pollito;
 
     void Awake()
     {
         resaltado = GetComponent<Resaltado>();
         parcela = GetComponent<Parcela>();
         gallina = GetComponent<Gallina>();
+        pollito = GetComponent<Pollito>();
     }
 
     void Start()
@@ -50,6 +52,10 @@ public class Interactuable : MonoBehaviour
 
             case Tipo.Gallina:
                 if (gallina != null) gallina.Tocar();
+                break;
+
+            case Tipo.Pollito:
+                if (pollito != null) pollito.Tocar();
                 break;
 
             case Tipo.Caja:

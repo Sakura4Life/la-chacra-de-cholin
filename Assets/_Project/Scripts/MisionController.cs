@@ -7,7 +7,7 @@ public class MisionController : MonoBehaviour
     enum Paso
     {
         Inactiva, EsperandoCosecha, AvisoPedido, LeyendoPedido,
-        EntregandoPedido, AvisoPollito, LeyendoPollito, PollitoActiva
+        EntregandoPedido, AvisoPollito, LeyendoPollito, PollitoActiva, PollitoEncontrado
     }
 
     [SerializeField] int tomatesPedido = 3;
@@ -22,9 +22,17 @@ public class MisionController : MonoBehaviour
     string textoPollito =
         "Nota nueva:\n\nSe escapó el pollito de la granja. Escucha con atención: debe estar cerca.";
 
+    [TextArea(3, 6)]
+    [SerializeField]
+    string textoGallinero =
+        "Nota:\n\nEl pollito está a salvo contigo. Llévalo al gallinero para que crezca.";
+
     Paso paso = Paso.Inactiva;
     Interactuable pizarra, caja;
     int entregadosBase;
+
+    public bool PollitoBuscandose => paso == Paso.PollitoActiva;
+    public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
 
     void Awake() { Instance = this; }
 
@@ -65,9 +73,25 @@ public class MisionController : MonoBehaviour
             case Paso.PollitoActiva:
                 Nota(textoPollito, null);
                 return true;
+            case Paso.PollitoEncontrado:
+                Nota(textoGallinero, null);
+                return true;
             default:
                 return false;
         }
+    }
+
+    // La llama Pollito cuando lo tocas estando escondido.
+    public void AlEncontrarPollito()
+    {
+        if (paso != Paso.PollitoActiva) return;
+
+        if (EstadoJuego.Instance != null) EstadoJuego.Instance.DarSemillaLegendaria();
+        IrA(Paso.PollitoEncontrado);
+
+        if (TutorialController.Instance != null)
+            TutorialController.Instance.Avisar("¡Encontraste al pollito! Recibiste la semilla legendaria.", 5f);
+        Handheld.Vibrate();
     }
 
     void Evaluar()
@@ -125,7 +149,10 @@ public class MisionController : MonoBehaviour
                 Nota(textoPollito, () => IrA(Paso.PollitoActiva));
                 break;
             case Paso.PollitoActiva:
-                FijarPista("Misión: encuentra al pollito perdido.");
+                FijarPista("Misión: encuentra al pollito. Escucha su piar (mejor con audífonos).");
+                break;
+            case Paso.PollitoEncontrado:
+                FijarPista("Llevar al pollito al gallinero llegará en la próxima fase.");
                 break;
         }
     }
