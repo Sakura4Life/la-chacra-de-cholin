@@ -1423,6 +1423,8 @@ MonoBehaviour:
     Entrega {0} tomates en la caja de entrega.'
   textoPollito: "Nota nueva:\n\nSe escap\xF3 el pollito de la granja. Escucha con
     atenci\xF3n: debe estar cerca."
+  textoGallinero: "Nota:\n\nEl pollito est\xE1 a salvo contigo. Ll\xE9valo al gallinero
+    para que crezca."
 --- !u!4 &1085061710
 Transform:
   m_ObjectHideFlags: 0
@@ -2619,9 +2621,9 @@ MonoBehaviour:
   m_fontSize: 46
   m_fontSizeBase: 46
   m_fontWeight: 400
-  m_enableAutoSizing: 0
-  m_fontSizeMin: 18
-  m_fontSizeMax: 72
+  m_enableAutoSizing: 1
+  m_fontSizeMin: 28
+  m_fontSizeMax: 46
   m_fontStyle: 0
   m_HorizontalAlignment: 2
   m_VerticalAlignment: 512

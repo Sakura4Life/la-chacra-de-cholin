@@ -22,8 +22,13 @@ public class HudJuego : MonoBehaviour
     {
         var j = EstadoJuego.Instance;
         if (j == null) return;
+
         textoMonedas.text = $"Monedas: {j.Monedas}";
         textoAgua.text = $"Agua: {j.Agua}/{j.AguaMax}";
-        textoInventario.text = $"Tomates: {j.Tomates}     Huevos: {j.Huevos}";
+
+        string inventario = $"Tomates: {j.Tomates}   Huevos: {j.Huevos}";
+        if (j.SemillasLegendarias > 0)
+            inventario += $"   Semilla legendaria: {j.SemillasLegendarias}";
+        textoInventario.text = inventario;
     }
 }

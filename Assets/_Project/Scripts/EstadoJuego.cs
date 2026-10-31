@@ -14,6 +14,7 @@ public class EstadoJuego : MonoBehaviour
     public int Agua { get; private set; }
     public int Tomates { get; private set; }
     public int Huevos { get; private set; }
+    public int SemillasLegendarias { get; private set; }
     public int TomatesCosechados { get; private set; }
     public int TomatesEntregados { get; private set; }
     public int AguaMax => aguaMaxima;
@@ -51,6 +52,8 @@ public class EstadoJuego : MonoBehaviour
     }
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
+
+    public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
 
     public int VenderTodo(out int tomates, out int huevos)
     {
