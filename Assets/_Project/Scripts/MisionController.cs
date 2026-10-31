@@ -111,6 +111,7 @@ public class MisionController : MonoBehaviour
     public void AlLlegarAlGallinero()
     {
         if (paso != Paso.PollitoEncontrado) return;
+        if (EstadoJuego.Instance != null) EstadoJuego.Instance.PonerPolloEnGallinero();
         IrA(Paso.PollitoEnGallinero);
     }
 
@@ -138,6 +139,10 @@ public class MisionController : MonoBehaviour
 
             case Paso.EsperandoCosecha:
                 if (juego.TomatesCosechados >= 1) IrA(Paso.AvisoPedido);
+                break;
+
+            case Paso.PollitoEnGallinero:
+                if (juego.PolloVendido) IrA(Paso.Libre);
                 break;
 
             case Paso.EntregandoPedido:

@@ -1,13 +1,23 @@
 using System;
 using UnityEngine;
 
+public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria }
+
 public class EstadoJuego : MonoBehaviour
 {
     public static EstadoJuego Instance { get; private set; }
 
+    [Header("Agua")]
     [SerializeField] int aguaMaxima = 3;
+
+    [Header("Precios base (provisionales)")]
     [SerializeField] int precioTomate = 5;
     [SerializeField] int precioHuevo = 8;
+    [SerializeField] int precioPollo = 50;
+    [SerializeField] int precioSemilla = 40;
+
+    [Header("Bonificador")]
+    [SerializeField] float segundosBonus = 120f;
 
     public bool TieneLlave { get; private set; }
     public int Monedas { get; private set; }
@@ -17,13 +27,44 @@ public class EstadoJuego : MonoBehaviour
     public int SemillasLegendarias { get; private set; }
     public int TomatesCosechados { get; private set; }
     public int TomatesEntregados { get; private set; }
+    public bool TienePollo { get; private set; }
+    public bool PolloVendido { get; private set; }
+    public Producto ProductoBonus { get; private set; } = Producto.Ninguno;
+
     public int AguaMax => aguaMaxima;
     public bool HayParaVender => Tomates > 0 || Huevos > 0;
+    public bool BonusActivo => ProductoBonus != Producto.Ninguno;
+    public float SegundosRestantesBonus => BonusActivo ? Mathf.Max(0f, finBonus - Time.time) : 0f;
+
+    float finBonus;
 
     public event Action OnCambio;
 
     void Awake() { Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
+
+    void Update()
+    {
+        if (BonusActivo && Time.time >= finBonus)
+        {
+            ProductoBonus = Producto.Ninguno;
+            OnCambio?.Invoke();
+        }
+    }
+
+    public static string NombreProducto(Producto p)
+    {
+        switch (p)
+        {
+            case Producto.Tomate: return "tomates";
+            case Producto.Huevo: return "huevos";
+            case Producto.Pollo: return "pollo";
+            case Producto.SemillaLegendaria: return "semilla legendaria";
+            default: return "nada";
+        }
+    }
+
+    // ---------- Recursos ----------
 
     public void DarLlave() { TieneLlave = true; OnCambio?.Invoke(); }
     public void LlenarAgua() { Agua = aguaMaxima; OnCambio?.Invoke(); }
@@ -52,19 +93,100 @@ public class EstadoJuego : MonoBehaviour
     }
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
-
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
+    public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
 
+    // ---------- Ventas y bonificador ----------
+
+    public int Cantidad(Producto p)
+    {
+        switch (p)
+        {
+            case Producto.Tomate: return Tomates;
+            case Producto.Huevo: return Huevos;
+            case Producto.Pollo: return TienePollo ? 1 : 0;
+            case Producto.SemillaLegendaria: return SemillasLegendarias;
+            default: return 0;
+        }
+    }
+
+    public int PrecioBase(Producto p)
+    {
+        switch (p)
+        {
+            case Producto.Tomate: return precioTomate;
+            case Producto.Huevo: return precioHuevo;
+            case Producto.Pollo: return precioPollo;
+            case Producto.SemillaLegendaria: return precioSemilla;
+            default: return 0;
+        }
+    }
+
+    public int Multiplicador(Producto p)
+    {
+        return BonusActivo && ProductoBonus == p ? 2 : 1;
+    }
+
+    // Vende todo lo que tengas de ese producto (con el bonificador si corresponde).
+    public int VenderProducto(Producto p, out int cantidad)
+    {
+        cantidad = Cantidad(p);
+        if (cantidad <= 0) return 0;
+
+        int total = cantidad * PrecioBase(p) * Multiplicador(p);
+
+        switch (p)
+        {
+            case Producto.Tomate: Tomates = 0; break;
+            case Producto.Huevo: Huevos = 0; break;
+            case Producto.Pollo: TienePollo = false; PolloVendido = true; break;
+            case Producto.SemillaLegendaria: SemillasLegendarias = 0; break;
+        }
+
+        Monedas += total;
+        OnCambio?.Invoke();
+        return total;
+    }
+
+    // Venta de la caja de entrega (pedidos): tomates y huevos, con el bonificador si corresponde.
     public int VenderTodo(out int tomates, out int huevos)
     {
         tomates = Tomates;
         huevos = Huevos;
-        int total = tomates * precioTomate + huevos * precioHuevo;
+        int total = tomates * precioTomate * Multiplicador(Producto.Tomate)
+                  + huevos * precioHuevo * Multiplicador(Producto.Huevo);
         Tomates = 0;
         Huevos = 0;
         Monedas += total;
         TomatesEntregados += tomates;
         OnCambio?.Invoke();
         return total;
+    }
+
+    // Gasta 1 semilla legendaria y duplica las ganancias de un producto durante un tiempo.
+    public bool ActivarBonus(Producto p, out string motivo)
+    {
+        motivo = "";
+        if (p != Producto.Tomate && p != Producto.Huevo && p != Producto.Pollo)
+        {
+            motivo = "Ese producto no admite bonificador.";
+            return false;
+        }
+        if (BonusActivo)
+        {
+            motivo = "Ya hay un bonificador activo.";
+            return false;
+        }
+        if (SemillasLegendarias <= 0)
+        {
+            motivo = "Necesitas una semilla legendaria.";
+            return false;
+        }
+
+        SemillasLegendarias--;
+        ProductoBonus = p;
+        finBonus = Time.time + segundosBonus;
+        OnCambio?.Invoke();
+        return true;
     }
 }
