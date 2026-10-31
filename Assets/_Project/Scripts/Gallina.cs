@@ -82,6 +82,14 @@ public class Gallina : MonoBehaviour
         Avisar("¡Puso un huevo! Tócalo para recogerlo.");
     }
 
+    // Se llama cuando el animal se vende: detiene todo y oculta el huevo.
+    public void Retirar()
+    {
+        StopAllCoroutines();
+        huevo.SetActive(false);
+        enabled = false;
+    }
+
     // Mantiene el cuerpo apoyado sobre el suelo mientras crece.
     void Apoyar()
     {

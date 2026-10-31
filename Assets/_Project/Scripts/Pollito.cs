@@ -37,6 +37,7 @@ public class Pollito : MonoBehaviour
     float proximoPiar;
     bool arrastrando;
     bool gallineroBrilla;
+    bool retirado;
 
     void Awake()
     {
@@ -65,7 +66,15 @@ public class Pollito : MonoBehaviour
         var mision = MisionController.Instance;
         if (mision == null) return;
 
-        bool visible = mision.PollitoVisible;
+        var juego = EstadoJuego.Instance;
+        if (!retirado && juego != null && juego.PolloVendido)
+        {
+            retirado = true;
+            if (gallina != null) gallina.Retirar();
+        }
+
+        bool visible = mision.PollitoVisible && !retirado;
+
         if (visible != cuerpo.enabled)
         {
             cuerpo.enabled = visible;
