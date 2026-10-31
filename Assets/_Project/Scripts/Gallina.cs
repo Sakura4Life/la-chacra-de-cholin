@@ -8,12 +8,17 @@ public class Gallina : MonoBehaviour
     [SerializeField] Renderer cuerpo;
     [SerializeField] GameObject huevo;
     [SerializeField] float segundosParaHuevo = 10f;
+    [Tooltip("Cuánto crece la primera vez que come (pollito a adulto).")]
+    [SerializeField] float factorAdulto = 1.7f;
+    [Tooltip("Altura del suelo donde se apoya (parte alta del gallinero).")]
+    [SerializeField] float alturaSuelo = 0.03f;
 
     static readonly int IdColor = Shader.PropertyToID("_BaseColor");
 
     MaterialPropertyBlock bloque;
     Vector3 escalaBase;
     Estado estado = Estado.Hambrienta;
+    bool adulto;
 
     void Awake()
     {
@@ -34,9 +39,9 @@ public class Gallina : MonoBehaviour
                     estado = Estado.Comiendo;
                     Aplicar();
                     StartCoroutine(Comer());
-                    Avisar("La gallina come. En un rato pondrá un huevo.");
+                    Avisar("Está comiendo y creciendo. En un rato pondrá un huevo.");
                 }
-                else Avisar("Tiene hambre. Cosecha un tomate para alimentarla.");
+                else Avisar("Tiene hambre. Cosecha un tomate para alimentarlo.");
                 break;
             case Estado.Comiendo:
                 Avisar("Está comiendo...");
@@ -46,23 +51,43 @@ public class Gallina : MonoBehaviour
                 estado = Estado.Hambrienta;
                 Aplicar();
                 Avisar("¡Recogiste un huevo!");
+                if (MisionController.Instance != null) MisionController.Instance.AlRecogerHuevo();
                 break;
         }
     }
 
     IEnumerator Comer()
     {
+        Vector3 inicio = escalaBase;
+        Vector3 fin = adulto ? escalaBase : escalaBase * factorAdulto;
+
         float t = 0f;
         while (t < segundosParaHuevo)
         {
             t += Time.deltaTime;
-            transform.localScale = escalaBase * (1f + 0.08f * Mathf.Sin(t * 10f));
+            float avance = Mathf.Clamp01(t / segundosParaHuevo);
+            float rebote = 1f + 0.08f * Mathf.Sin(t * 10f);
+            transform.localScale = Vector3.Lerp(inicio, fin, avance) * rebote;
+            Apoyar();
             yield return null;
         }
+
+        escalaBase = fin;
+        adulto = true;
         transform.localScale = escalaBase;
+        Apoyar();
+
         estado = Estado.ConHuevo;
         Aplicar();
-        Avisar("¡La gallina puso un huevo! Tócala para recogerlo.");
+        Avisar("¡Puso un huevo! Tócalo para recogerlo.");
+    }
+
+    // Mantiene el cuerpo apoyado sobre el suelo mientras crece.
+    void Apoyar()
+    {
+        Vector3 p = transform.localPosition;
+        p.y = alturaSuelo + transform.localScale.x * 0.5f;
+        transform.localPosition = p;
     }
 
     void Aplicar()

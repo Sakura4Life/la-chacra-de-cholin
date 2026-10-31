@@ -4,10 +4,12 @@ public class MisionController : MonoBehaviour
 {
     public static MisionController Instance { get; private set; }
 
+    // El orden importa: los estados del pollito se comparan con >=.
     enum Paso
     {
         Inactiva, EsperandoCosecha, AvisoPedido, LeyendoPedido,
-        EntregandoPedido, AvisoPollito, LeyendoPollito, PollitoActiva, PollitoEncontrado
+        EntregandoPedido, AvisoPollito, LeyendoPollito,
+        PollitoActiva, PollitoEncontrado, PollitoEnGallinero, Libre
     }
 
     [SerializeField] int tomatesPedido = 3;
@@ -27,12 +29,19 @@ public class MisionController : MonoBehaviour
     string textoGallinero =
         "Nota:\n\nEl pollito está a salvo contigo. Llévalo al gallinero para que crezca.";
 
+    [TextArea(3, 6)]
+    [SerializeField]
+    string textoLibre =
+        "Nota:\n\nLa chacra está viva otra vez. Cuida tus cultivos y a tu pollito.";
+
     Paso paso = Paso.Inactiva;
     Interactuable pizarra, caja;
     int entregadosBase;
 
     public bool PollitoBuscandose => paso == Paso.PollitoActiva;
     public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
+    public bool PollitoEnGallinero => paso >= Paso.PollitoEnGallinero;
+    public bool PollitoVisible => paso >= Paso.PollitoActiva;
 
     void Awake() { Instance = this; }
 
@@ -76,6 +85,10 @@ public class MisionController : MonoBehaviour
             case Paso.PollitoEncontrado:
                 Nota(textoGallinero, null);
                 return true;
+            case Paso.PollitoEnGallinero:
+            case Paso.Libre:
+                Nota(textoLibre, null);
+                return true;
             default:
                 return false;
         }
@@ -92,6 +105,20 @@ public class MisionController : MonoBehaviour
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("¡Encontraste al pollito! Recibiste la semilla legendaria.", 5f);
         Handheld.Vibrate();
+    }
+
+    // La llama Pollito cuando lo sueltas sobre el gallinero.
+    public void AlLlegarAlGallinero()
+    {
+        if (paso != Paso.PollitoEncontrado) return;
+        IrA(Paso.PollitoEnGallinero);
+    }
+
+    // La llama Gallina cada vez que recoges un huevo; solo la primera vez cambia el paso.
+    public void AlRecogerHuevo()
+    {
+        if (paso != Paso.PollitoEnGallinero) return;
+        IrA(Paso.Libre);
     }
 
     void Evaluar()
@@ -152,7 +179,13 @@ public class MisionController : MonoBehaviour
                 FijarPista("Misión: encuentra al pollito. Escucha su piar (mejor con audífonos).");
                 break;
             case Paso.PollitoEncontrado:
-                FijarPista("Llevar al pollito al gallinero llegará en la próxima fase.");
+                FijarPista("Arrastra al pollito con el dedo hasta el gallinero que brilla.");
+                break;
+            case Paso.PollitoEnGallinero:
+                FijarPista("Dale un tomate al pollito: tócalo para alimentarlo.");
+                break;
+            case Paso.Libre:
+                FijarPista("");
                 break;
         }
     }
