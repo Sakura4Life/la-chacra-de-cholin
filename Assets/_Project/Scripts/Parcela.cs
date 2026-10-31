@@ -8,7 +8,7 @@ public class Parcela : MonoBehaviour
     [SerializeField] Renderer tierra;
     [SerializeField] Transform planta;
     [SerializeField] float segundosCrecimiento = 8f;
-    [SerializeField] int recompensa = 10;
+    [SerializeField] int tomatesPorCosecha = 1;
 
     const float AlturaTierra = 0.04f;
     const float TamanoSeca = 0.04f;
@@ -79,10 +79,10 @@ public class Parcela : MonoBehaviour
                 Avisar("Todavía está creciendo.");
                 break;
             case Estado.Lista:
-                if (juego != null) juego.SumarMonedas(recompensa);
+                if (juego != null) juego.SumarTomates(tomatesPorCosecha);
                 estado = Estado.Vacia;
                 Aplicar(0f);
-                Avisar($"¡Cosechaste! +{recompensa} monedas");
+                Avisar($"¡Cosechaste {tomatesPorCosecha} tomate!");
                 break;
         }
     }

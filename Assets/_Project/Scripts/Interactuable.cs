@@ -2,25 +2,34 @@ using UnityEngine;
 
 public class Interactuable : MonoBehaviour
 {
-    public enum Tipo { Pizarra, Pozo, Parcela }
+    public enum Tipo { Pizarra, Pozo, Parcela, Gallina, Caja }
 
     [SerializeField] Tipo tipo;
     public Tipo TipoObjeto => tipo;
 
     Resaltado resaltado;
     Parcela parcela;
+    Gallina gallina;
 
     void Awake()
     {
         resaltado = GetComponent<Resaltado>();
         parcela = GetComponent<Parcela>();
+        gallina = GetComponent<Gallina>();
     }
 
     void Start()
     {
-        if (tipo == Tipo.Parcela) return;
-        if (TutorialController.Instance != null)
-            TutorialController.Instance.Registrar(this);
+        if (tipo == Tipo.Pizarra || tipo == Tipo.Pozo)
+        {
+            if (TutorialController.Instance != null)
+                TutorialController.Instance.Registrar(this);
+        }
+        if (tipo == Tipo.Pizarra || tipo == Tipo.Caja)
+        {
+            if (MisionController.Instance != null)
+                MisionController.Instance.Registrar(this);
+        }
     }
 
     public void Resaltar(bool valor)
@@ -39,6 +48,14 @@ public class Interactuable : MonoBehaviour
                 if (parcela != null) parcela.Tocar();
                 break;
 
+            case Tipo.Gallina:
+                if (gallina != null) gallina.Tocar();
+                break;
+
+            case Tipo.Caja:
+                Entregar();
+                break;
+
             case Tipo.Pozo:
                 bool teniaLlave = juego != null && juego.TieneLlave;
                 if (tutorial != null) tutorial.AlTocar(this);
@@ -54,5 +71,21 @@ public class Interactuable : MonoBehaviour
                 if (tutorial != null) tutorial.AlTocar(this);
                 break;
         }
+    }
+
+    void Entregar()
+    {
+        var juego = EstadoJuego.Instance;
+        var tutorial = TutorialController.Instance;
+        if (juego == null || tutorial == null) return;
+
+        if (!juego.HayParaVender)
+        {
+            tutorial.Avisar("No tienes nada para entregar. Cosecha tomates o recoge huevos.");
+            return;
+        }
+
+        int monedas = juego.VenderTodo(out int tomates, out int huevos);
+        tutorial.Avisar($"Entregaste {tomates} tomate(s) y {huevos} huevo(s): +{monedas} monedas");
     }
 }

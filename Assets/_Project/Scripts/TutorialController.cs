@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using TMPro;
 using UnityEngine;
@@ -27,6 +28,9 @@ public class TutorialController : MonoBehaviour
     Interactuable pizarra, pozo;
     string pistaBase = "";
     Coroutine aviso;
+    Action alCerrarNota;
+
+    public bool TutorialCompleto => paso == Paso.Completo;
 
     void Awake() { Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
@@ -64,7 +68,12 @@ public class TutorialController : MonoBehaviour
                 else AbrirNota();
                 break;
             case Paso.Completo:
-                if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) AbrirNota();
+                if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra)
+                {
+                    bool atendida = MisionController.Instance != null
+                                    && MisionController.Instance.AlTocarPizarra();
+                    if (!atendida) AbrirNota();
+                }
                 break;
         }
     }
@@ -74,9 +83,22 @@ public class TutorialController : MonoBehaviour
     {
         panelNota.SetActive(false);
         if (paso == Paso.LeerNota) IrA(Paso.BuscarPozo);
+
+        var callback = alCerrarNota;
+        alCerrarNota = null;
+        callback?.Invoke();
     }
 
-    // Mensaje temporal que luego vuelve a la pista del paso actual.
+    public void MostrarNota(string texto, Action alCerrar = null)
+    {
+        textoNota.text = texto;
+        alCerrarNota = alCerrar;
+        panelNota.SetActive(true);
+    }
+
+    // Pista fija que queda visible hasta que se cambie (los avisos temporales la tapan y luego vuelve).
+    public void FijarPista(string texto) { MostrarPista(texto); }
+
     public void Avisar(string texto, float segundos = 3f)
     {
         if (aviso != null) StopCoroutine(aviso);
@@ -124,11 +146,7 @@ public class TutorialController : MonoBehaviour
         if (pozo != null) pozo.Resaltar(paso == Paso.BuscarPozo);
     }
 
-    void AbrirNota()
-    {
-        textoNota.text = contenidoNota;
-        panelNota.SetActive(true);
-    }
+    void AbrirNota() { MostrarNota(contenidoNota); }
 
     void MostrarPista(string texto)
     {
