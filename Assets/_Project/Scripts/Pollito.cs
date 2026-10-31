@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 
 public class Pollito : MonoBehaviour
 {
@@ -19,14 +21,27 @@ public class Pollito : MonoBehaviour
     [SerializeField] GameObject plumas;
     [SerializeField] float distanciaPlumas = 1.8f;
 
+    [Header("Llevarlo al gallinero")]
+    [SerializeField] Transform puntoGallinero;
+    [SerializeField] Resaltado resaltadoGallinero;
+    [SerializeField] float radioSoltar = 0.2f;
+    [SerializeField] float alturaArrastre = 0.09f;
+    [SerializeField] float alturaSuelo = 0.03f;
+    [SerializeField] float limite = 0.45f;
+
     static readonly int IdColor = Shader.PropertyToID("_BaseColor");
 
     AudioSource fuente;
     Transform camara;
+    Gallina gallina;
     float proximoPiar;
+    bool arrastrando;
+    bool gallineroBrilla;
 
     void Awake()
     {
+        gallina = GetComponent<Gallina>();
+
         fuente = gameObject.AddComponent<AudioSource>();
         fuente.playOnAwake = false;
         fuente.spatialBlend = 1f;                      // sonido 3D
@@ -48,16 +63,26 @@ public class Pollito : MonoBehaviour
     void Update()
     {
         var mision = MisionController.Instance;
-        bool buscando = mision != null && mision.PollitoBuscandose;
-        bool visible = buscando || (mision != null && mision.PollitoYaEncontrado);
+        if (mision == null) return;
 
+        bool visible = mision.PollitoVisible;
         if (visible != cuerpo.enabled)
         {
             cuerpo.enabled = visible;
             colision.enabled = visible;
         }
 
-        if (!buscando)
+        bool encontrado = mision.PollitoYaEncontrado;
+        if (encontrado != gallineroBrilla)
+        {
+            gallineroBrilla = encontrado;
+            if (resaltadoGallinero != null) resaltadoGallinero.Activar(encontrado);
+        }
+
+        if (encontrado) ManejarArrastre();
+        else arrastrando = false;
+
+        if (!mision.PollitoBuscandose)
         {
             if (plumas.activeSelf) plumas.SetActive(false);
             return;
@@ -83,10 +108,104 @@ public class Pollito : MonoBehaviour
         }
     }
 
+    // Toque rápido sobre el pollito (lo llama Interactuable).
     public void Tocar()
     {
-        if (MisionController.Instance == null || !MisionController.Instance.PollitoBuscandose) return;
-        MisionController.Instance.AlEncontrarPollito();
+        var mision = MisionController.Instance;
+        if (mision == null) return;
+
+        if (mision.PollitoBuscandose)
+            mision.AlEncontrarPollito();
+        else if (mision.PollitoYaEncontrado)
+            Avisar("Arrastra al pollito con el dedo hasta el gallinero, el que brilla.");
+        else if (mision.PollitoEnGallinero && gallina != null)
+            gallina.Tocar();
+    }
+
+    // ---------- Arrastrar ----------
+
+    void ManejarArrastre()
+    {
+        var pantalla = Touchscreen.current;
+        if (pantalla == null || Camera.main == null) return;
+        var toque = pantalla.primaryTouch;
+
+        if (toque.press.wasPressedThisFrame && !arrastrando)
+        {
+            int id = toque.touchId.ReadValue();
+            if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(id)) return;
+
+            Ray rayo = Camera.main.ScreenPointToRay(toque.position.ReadValue());
+            if (Physics.Raycast(rayo, out RaycastHit golpe, 10f) && golpe.collider == colision)
+                arrastrando = true;
+        }
+
+        if (!arrastrando) return;
+
+        if (ContarDedos(pantalla) > 1)
+        {
+            arrastrando = false;
+            return;
+        }
+
+        if (toque.press.isPressed)
+            Mover(toque.position.ReadValue());
+
+        if (toque.press.wasReleasedThisFrame)
+        {
+            arrastrando = false;
+            Soltar();
+        }
+    }
+
+    void Mover(Vector2 posicionPantalla)
+    {
+        var padre = transform.parent;
+        if (padre == null) return;
+
+        Ray rayo = Camera.main.ScreenPointToRay(posicionPantalla);
+        var plano = new Plane(padre.up, padre.TransformPoint(new Vector3(0f, alturaArrastre, 0f)));
+        if (plano.Raycast(rayo, out float distancia))
+        {
+            Vector3 local = padre.InverseTransformPoint(rayo.GetPoint(distancia));
+            local.x = Mathf.Clamp(local.x, -limite, limite);
+            local.z = Mathf.Clamp(local.z, -limite, limite);
+            local.y = alturaArrastre;
+            transform.localPosition = local;
+        }
+    }
+
+    void Soltar()
+    {
+        Vector3 p = transform.localPosition;
+        Vector3 destino = puntoGallinero.localPosition;
+        float distancia = new Vector2(p.x - destino.x, p.z - destino.z).magnitude;
+
+        if (distancia <= radioSoltar)
+        {
+            transform.localPosition = destino;
+            if (gallina != null) gallina.enabled = true;
+            MisionController.Instance.AlLlegarAlGallinero();
+        }
+        else
+        {
+            p.y = alturaSuelo;
+            transform.localPosition = p;
+            Avisar("Llévalo hasta el gallinero, el que brilla.");
+        }
+    }
+
+    static int ContarDedos(Touchscreen pantalla)
+    {
+        int n = 0;
+        foreach (var dedo in pantalla.touches)
+            if (dedo.isInProgress) n++;
+        return n;
+    }
+
+    static void Avisar(string texto)
+    {
+        if (TutorialController.Instance != null) TutorialController.Instance.Avisar(texto);
     }
 
     static AudioClip CrearPioSintetico()
