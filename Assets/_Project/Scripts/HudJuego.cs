@@ -5,6 +5,7 @@ public class HudJuego : MonoBehaviour
 {
     [SerializeField] TMP_Text textoMonedas;
     [SerializeField] TMP_Text textoAgua;
+    [SerializeField] TMP_Text textoInventario;
 
     void Start()
     {
@@ -23,5 +24,6 @@ public class HudJuego : MonoBehaviour
         if (j == null) return;
         textoMonedas.text = $"Monedas: {j.Monedas}";
         textoAgua.text = $"Agua: {j.Agua}/{j.AguaMax}";
+        textoInventario.text = $"Tomates: {j.Tomates}     Huevos: {j.Huevos}";
     }
 }
