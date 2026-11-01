@@ -74,12 +74,23 @@ public class Gallina : MonoBehaviour
 
         escalaBase = fin;
         adulto = true;
+        if (EstadoJuego.Instance != null) EstadoJuego.Instance.MarcarPolloAdulto();
         transform.localScale = escalaBase;
         Apoyar();
 
         estado = Estado.ConHuevo;
         Aplicar();
         Avisar("¡Puso un huevo! Tócalo para recogerlo.");
+    }
+
+    // Al cargar una partida: lo deja con tamaño de adulto.
+    public void RestaurarAdulto()
+    {
+        if (adulto) return;
+        adulto = true;
+        escalaBase *= factorAdulto;
+        transform.localScale = escalaBase;
+        Apoyar();
     }
 
     // Se llama cuando el animal se vende: detiene todo y oculta el huevo.

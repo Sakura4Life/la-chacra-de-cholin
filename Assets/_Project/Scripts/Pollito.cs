@@ -38,6 +38,7 @@ public class Pollito : MonoBehaviour
     bool arrastrando;
     bool gallineroBrilla;
     bool retirado;
+    bool posicionado;
 
     void Awake()
     {
@@ -81,6 +82,18 @@ public class Pollito : MonoBehaviour
             colision.enabled = visible;
         }
 
+        // Al cargar una partida: si el pollito ya estaba en el gallinero, lo coloca ahí.
+        if (!posicionado && mision.PollitoEnGallinero && juego != null && juego.TienePollo)
+        {
+            posicionado = true;
+            transform.localPosition = puntoGallinero.localPosition;
+            if (gallina != null)
+            {
+                gallina.enabled = true;
+                if (juego.PolloAdulto) gallina.RestaurarAdulto();
+            }
+        }
+
         bool encontrado = mision.PollitoYaEncontrado;
         if (encontrado != gallineroBrilla)
         {
@@ -91,7 +104,7 @@ public class Pollito : MonoBehaviour
         if (encontrado) ManejarArrastre();
         else arrastrando = false;
 
-        if (!mision.PollitoBuscandose)
+        if (!mision.PollitoBuscandose || !ControladorGranja.GranjaColocada)
         {
             if (plumas.activeSelf) plumas.SetActive(false);
             return;
@@ -193,6 +206,7 @@ public class Pollito : MonoBehaviour
         if (distancia <= radioSoltar)
         {
             transform.localPosition = destino;
+            posicionado = true;
             if (gallina != null) gallina.enabled = true;
             MisionController.Instance.AlLlegarAlGallinero();
         }
