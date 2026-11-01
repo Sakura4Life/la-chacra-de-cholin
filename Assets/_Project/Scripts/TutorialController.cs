@@ -31,6 +31,17 @@ public class TutorialController : MonoBehaviour
     Action alCerrarNota;
 
     public bool TutorialCompleto => paso == Paso.Completo;
+    public int PasoActual => (int)paso;
+
+    // Al cargar una partida: solo se restaura si ya habías terminado el tutorial.
+    public void Restaurar(int valor)
+    {
+        if (valor != (int)Paso.Completo) return;
+        paso = Paso.Completo;
+        MostrarPista("");
+        hud.alpha = 1f;
+        AplicarResaltado();
+    }
 
     void Awake() { Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
@@ -133,7 +144,7 @@ public class TutorialController : MonoBehaviour
             case Paso.Completo:
                 MostrarPista("");
                 Avisar("¡Conseguiste la llave del huerto! Se desbloqueó tu panel y las parcelas.", 5f);
-                Handheld.Vibrate();
+                Ajustes.Vibrar();
                 if (EstadoJuego.Instance != null) EstadoJuego.Instance.DarLlave();
                 StartCoroutine(MostrarHud());
                 break;

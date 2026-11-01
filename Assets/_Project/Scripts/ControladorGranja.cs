@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -17,18 +18,27 @@ public class ControladorGranja : MonoBehaviour
     [SerializeField] private Transform camara;
     [SerializeField] private TMP_Text mensaje;
     [SerializeField] private GameObject botonReubicar;
+    [SerializeField] private GameObject botonReiniciar;
 
     [Header("Ajustes")]
     [SerializeField] private float escalaInicial = 0.5f; // 0.5 = 50 cm
 
     private static readonly List<ARRaycastHit> impactos = new List<ARRaycastHit>();
     private GameObject ancla;
+    private ARSession sesion;
+    private bool reiniciando;
+    private bool hayEscalaGuardada;
+    private Vector3 escalaGuardada;
 
     public Estado EstadoActual { get; private set; } = Estado.Escaneando;
     public Transform Granja { get; private set; }
 
+    // true solo mientras la granja está colocada y visible (otros scripts lo consultan).
+    public static bool GranjaColocada { get; private set; }
+
     private void Start()
     {
+        sesion = FindFirstObjectByType<ARSession>();
         EntrarEnModoColocar();
     }
 
@@ -52,17 +62,63 @@ public class ControladorGranja : MonoBehaviour
         }
     }
 
-    // Lo llama el botón "Reubicar".
+    // Lo llama el botón "Reubicar": mueve la granja conservando los planos ya detectados.
     public void Reubicar()
     {
         if (Granja != null) EntrarEnModoColocar();
     }
 
+    // Lo llama el botón "Reiniciar": borra los planos y escanea de cero.
+    public void ReiniciarEscaneo()
+    {
+        if (Granja == null || reiniciando) return;
+        StartCoroutine(RutinaReinicio());
+    }
+
+    private IEnumerator RutinaReinicio()
+    {
+        reiniciando = true;
+
+        // Guardamos el tamaño y escondemos la granja SIN desactivarla:
+        // si se desactiva, los cultivos que están creciendo se quedarían detenidos.
+        escalaGuardada = Granja.localScale;
+        hayEscalaGuardada = true;
+        Granja.SetParent(null, true);
+        Granja.localScale = Vector3.one * 0.0001f;
+
+        if (ancla != null)
+        {
+            Destroy(ancla);
+            ancla = null;
+        }
+
+        EstadoActual = Estado.Escaneando;
+        GranjaColocada = false;
+        if (botonReubicar != null) botonReubicar.SetActive(false);
+        if (botonReiniciar != null) botonReiniciar.SetActive(false);
+        if (mensaje != null) mensaje.text = "Reiniciando el escaneo...";
+
+        // Reinicia la sesión de AR: se borran todos los planos y se empieza de cero.
+        if (sesion != null) sesion.Reset();
+        yield return null;
+        yield return null;
+
+        MostrarPlanos(true);
+        if (mensaje != null)
+            mensaje.text = "Mueve el celular despacio para escanear el piso y toca para colocar la granja.";
+    }
+
     private void Colocar(Vector3 posicion)
     {
-        // Conservamos rotación y escala si ya existía la granja.
-        Quaternion rotacion = Granja != null ? Granja.rotation : MirarACamara(posicion);
-        Vector3 escala = Granja != null ? Granja.localScale : Vector3.one * escalaInicial;
+        bool trasReinicio = reiniciando;
+
+        // Tras un reinicio la orientación anterior ya no vale: la granja mira hacia la cámara.
+        Quaternion rotacion = (Granja != null && !trasReinicio) ? Granja.rotation : MirarACamara(posicion);
+        Vector3 escala = hayEscalaGuardada ? escalaGuardada
+                       : Granja != null ? Granja.localScale
+                       : Vector3.one * escalaInicial;
+        hayEscalaGuardada = false;
+        reiniciando = false;
 
         // Quitamos el ancla anterior sin destruir la granja.
         if (ancla != null)
@@ -87,16 +143,20 @@ public class ControladorGranja : MonoBehaviour
         Granja.localScale = escala;
 
         EstadoActual = Estado.Colocada;
+        GranjaColocada = true;
         MostrarPlanos(false);
         if (botonReubicar != null) botonReubicar.SetActive(true);
+        if (botonReiniciar != null) botonReiniciar.SetActive(true);
         if (mensaje != null) mensaje.text = "Pellizca para cambiar el tamaño. Gira con dos dedos.";
     }
 
     private void EntrarEnModoColocar()
     {
         EstadoActual = Estado.Escaneando;
+        GranjaColocada = false;
         MostrarPlanos(true);
         if (botonReubicar != null) botonReubicar.SetActive(false);
+        if (botonReiniciar != null) botonReiniciar.SetActive(Granja != null && !reiniciando);
         if (mensaje != null)
         {
             mensaje.text = Granja == null

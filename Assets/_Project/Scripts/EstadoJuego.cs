@@ -3,6 +3,14 @@ using UnityEngine;
 
 public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria }
 
+[Serializable]
+public class DatosEstado
+{
+    public bool llave, tienePollo, polloVendido, polloAdulto;
+    public int monedas, agua, tomates, huevos, semillas, cosechados, entregados;
+    public int productoBonus;
+    public float segundosBonus;
+}
 public class EstadoJuego : MonoBehaviour
 {
     public static EstadoJuego Instance { get; private set; }
@@ -29,6 +37,7 @@ public class EstadoJuego : MonoBehaviour
     public int TomatesEntregados { get; private set; }
     public bool TienePollo { get; private set; }
     public bool PolloVendido { get; private set; }
+    public bool PolloAdulto { get; private set; }
     public Producto ProductoBonus { get; private set; } = Producto.Ninguno;
 
     public int AguaMax => aguaMaxima;
@@ -95,6 +104,49 @@ public class EstadoJuego : MonoBehaviour
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
+
+    // ---------- Guardado ----------
+
+    public void MarcarPolloAdulto() { PolloAdulto = true; OnCambio?.Invoke(); }
+
+    public DatosEstado Exportar()
+    {
+        return new DatosEstado
+        {
+            llave = TieneLlave,
+            tienePollo = TienePollo,
+            polloVendido = PolloVendido,
+            polloAdulto = PolloAdulto,
+            monedas = Monedas,
+            agua = Agua,
+            tomates = Tomates,
+            huevos = Huevos,
+            semillas = SemillasLegendarias,
+            cosechados = TomatesCosechados,
+            entregados = TomatesEntregados,
+            productoBonus = (int)ProductoBonus,
+            segundosBonus = SegundosRestantesBonus
+        };
+    }
+
+    public void Importar(DatosEstado d)
+    {
+        if (d == null) return;
+        TieneLlave = d.llave;
+        TienePollo = d.tienePollo;
+        PolloVendido = d.polloVendido;
+        PolloAdulto = d.polloAdulto;
+        Monedas = d.monedas;
+        Agua = d.agua;
+        Tomates = d.tomates;
+        Huevos = d.huevos;
+        SemillasLegendarias = d.semillas;
+        TomatesCosechados = d.cosechados;
+        TomatesEntregados = d.entregados;
+        ProductoBonus = (Producto)d.productoBonus;
+        finBonus = Time.time + d.segundosBonus;
+        OnCambio?.Invoke();
+    }
 
     // ---------- Ventas y bonificador ----------
 

@@ -42,6 +42,34 @@ public class MisionController : MonoBehaviour
     public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
     public bool PollitoEnGallinero => paso >= Paso.PollitoEnGallinero;
     public bool PollitoVisible => paso >= Paso.PollitoActiva;
+    public int PasoActual => (int)paso;
+    public int EntregadosBase => entregadosBase;
+
+    // Al cargar una partida: retoma el paso guardado sin repetir recompensas.
+    public void Restaurar(int valor, int baseEntregados)
+    {
+        var p = (Paso)valor;
+        if (p == Paso.LeyendoPedido) p = Paso.AvisoPedido;     // lectura transitoria
+        if (p == Paso.LeyendoPollito) p = Paso.AvisoPollito;
+
+        FijarPista("");
+        entregadosBase = baseEntregados;
+
+        if (p == Paso.Inactiva || p == Paso.EsperandoCosecha)
+        {
+            paso = p;
+            AplicarResaltado();
+            return;
+        }
+        if (p == Paso.EntregandoPedido)
+        {
+            paso = p;
+            AplicarResaltado();
+            Evaluar();
+            return;
+        }
+        IrA(p);
+    }
 
     void Awake() { Instance = this; }
 
@@ -104,7 +132,7 @@ public class MisionController : MonoBehaviour
 
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("¡Encontraste al pollito! Recibiste la semilla legendaria.", 5f);
-        Handheld.Vibrate();
+        Ajustes.Vibrar();
     }
 
     // La llama Pollito cuando lo sueltas sobre el gallinero.
