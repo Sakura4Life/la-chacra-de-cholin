@@ -7,9 +7,17 @@ public class Resaltado : MonoBehaviour
     [SerializeField] float velocidad = 3f;
     [SerializeField, Range(0f, 1f)] float intensidad = 0.8f;
 
-    static readonly int IdColor = Shader.PropertyToID("_BaseColor");
+    // Nombres posibles de la propiedad de color, en orden de prioridad:
+    // URP Lit, glTFast (modelos .glb) y shaders antiguos.
+    static readonly int[] IdsColor =
+    {
+        Shader.PropertyToID("_BaseColor"),
+        Shader.PropertyToID("baseColorFactor"),
+        Shader.PropertyToID("_Color"),
+    };
 
     readonly List<Renderer> renderers = new List<Renderer>();
+    readonly List<int> ids = new List<int>();
     readonly List<Color> originales = new List<Color>();
     MaterialPropertyBlock bloque;
 
@@ -18,10 +26,18 @@ public class Resaltado : MonoBehaviour
         bloque = new MaterialPropertyBlock();
         foreach (var r in GetComponentsInChildren<Renderer>())
         {
-            if (r.sharedMaterial != null && r.sharedMaterial.HasProperty(IdColor))
+            var mat = r.sharedMaterial;
+            if (mat == null) continue;
+
+            foreach (int id in IdsColor)
             {
-                renderers.Add(r);
-                originales.Add(r.sharedMaterial.GetColor(IdColor));
+                if (mat.HasProperty(id))
+                {
+                    renderers.Add(r);
+                    ids.Add(id);
+                    originales.Add(mat.GetColor(id));
+                    break;
+                }
             }
         }
         enabled = false;
@@ -39,7 +55,8 @@ public class Resaltado : MonoBehaviour
         float t = (Mathf.Sin(Time.time * velocidad) + 1f) * 0.5f * intensidad;
         for (int i = 0; i < renderers.Count; i++)
         {
-            bloque.SetColor(IdColor, Color.Lerp(originales[i], colorBrillo, t));
+            bloque.Clear();
+            bloque.SetColor(ids[i], Color.Lerp(originales[i], colorBrillo, t));
             renderers[i].SetPropertyBlock(bloque);
         }
     }
