@@ -1670,7 +1670,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c1c740f613a0f1a45b1f58c3374c4024, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EstadoJuego
-  aguaMaxima: 3
+  aguaMaxima: 12
   precioTomate: 5
   precioHuevo: 8
   precioPollo: 50
@@ -4609,6 +4609,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MisionController
   tomatesPedido: 3
+  semillasTomateIniciales: 12
+  textoSemillas: "Cholin:\n\nAqu\xED tienes tus primeras {0} semillas de tomate.
+    Si\xE9mbralas en los huecos del huerto, ri\xE9galas con la regadera y espera
+    a que crezcan."
   textoPedido: 'Pedido de la pizarra:
 
 

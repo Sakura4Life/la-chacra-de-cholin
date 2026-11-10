@@ -7,12 +7,19 @@ public class MisionController : MonoBehaviour
     // El orden importa: los estados del pollito se comparan con >=.
     enum Paso
     {
-        Inactiva, EsperandoCosecha, AvisoPedido, LeyendoPedido,
+        Inactiva, BuscarSemillas, EsperandoCosecha, AvisoPedido, LeyendoPedido,
         EntregandoPedido, AvisoPollito, LeyendoPollito,
         PollitoActiva, PollitoEncontrado, PollitoEnGallinero, Libre
     }
 
     [SerializeField] int tomatesPedido = 3;
+    [Tooltip("Semillas de tomate que Cholin entrega al tocar el granero.")]
+    [SerializeField] int semillasTomateIniciales = 10;
+
+    [TextArea(3, 6)]
+    [SerializeField]
+    string textoSemillas =
+        "Cholin:\n\nAquí tienes tus primeras {0} semillas de tomate. Siémbralas en los huecos del huerto, riégalas con la regadera y espera a que crezcan.";
 
     [TextArea(3, 6)]
     [SerializeField]
@@ -35,9 +42,10 @@ public class MisionController : MonoBehaviour
         "Nota:\n\nLa chacra está viva otra vez. Cuida tus cultivos y a tu pollito.";
 
     Paso paso = Paso.Inactiva;
-    Interactuable pizarra, caja;
+    Interactuable pizarra, caja, granero;
     int entregadosBase;
 
+    public bool BuscandoSemillas => paso == Paso.BuscarSemillas;
     public bool PollitoBuscandose => paso == Paso.PollitoActiva;
     public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
     public bool PollitoEnGallinero => paso >= Paso.PollitoEnGallinero;
@@ -89,6 +97,7 @@ public class MisionController : MonoBehaviour
     {
         if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) pizarra = objeto;
         else if (objeto.TipoObjeto == Interactuable.Tipo.Caja) caja = objeto;
+        else if (objeto.TipoObjeto == Interactuable.Tipo.Granero) granero = objeto;
         AplicarResaltado();
     }
 
@@ -120,6 +129,20 @@ public class MisionController : MonoBehaviour
             default:
                 return false;
         }
+    }
+
+    // La llama Interactuable al tocar el granero. Devuelve true si la misión se encargó del toque.
+    public bool AlTocarGranero()
+    {
+        if (paso != Paso.BuscarSemillas) return false;
+
+        // Primero se entregan las semillas y se cambia de paso, para que un doble toque no las duplique.
+        if (EstadoJuego.Instance != null)
+            EstadoJuego.Instance.SumarSemillas(Cultivo.Tomate, semillasTomateIniciales);
+        IrA(Paso.EsperandoCosecha);
+        Nota(string.Format(textoSemillas, semillasTomateIniciales), null);
+        Ajustes.Vibrar();
+        return true;
     }
 
     // La llama Pollito cuando lo tocas estando escondido.
@@ -158,11 +181,7 @@ public class MisionController : MonoBehaviour
         switch (paso)
         {
             case Paso.Inactiva:
-                if (juego.TieneLlave)
-                {
-                    paso = Paso.EsperandoCosecha;
-                    Evaluar();
-                }
+                if (juego.TieneLlave) IrA(Paso.BuscarSemillas);
                 break;
 
             case Paso.EsperandoCosecha:
@@ -190,6 +209,12 @@ public class MisionController : MonoBehaviour
 
         switch (paso)
         {
+            case Paso.BuscarSemillas:
+                FijarPista("Cholin te espera en el granero que brilla. Tócalo para recibir tus semillas.");
+                break;
+            case Paso.EsperandoCosecha:
+                FijarPista("Siembra: toca un hueco del huerto, riégalo y espera a que crezca.");
+                break;
             case Paso.AvisoPedido:
                 FijarPista("Hay un pedido nuevo en la pizarra. Tócala.");
                 break;
@@ -225,10 +250,13 @@ public class MisionController : MonoBehaviour
 
     void AplicarResaltado()
     {
+        if (paso == Paso.Inactiva) return;
         if (pizarra != null)
             pizarra.Resaltar(paso == Paso.AvisoPedido || paso == Paso.AvisoPollito);
         if (caja != null)
             caja.Resaltar(paso == Paso.EntregandoPedido);
+        if (granero != null)
+            granero.Resaltar(paso == Paso.BuscarSemillas);
     }
 
     string TextoProgreso(int entregados)

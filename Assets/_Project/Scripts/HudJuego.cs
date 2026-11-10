@@ -20,7 +20,7 @@ public class HudJuego : MonoBehaviour
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.OnCambio -= Refrescar;
     }
 
-    // Mientras hay bonificador, actualiza la cuenta atrás una vez por segundo.
+    // Mientras hay bonificador, actualiza la cuenta atrÃ¡s una vez por segundo.
     void Update()
     {
         var j = EstadoJuego.Instance;
@@ -43,6 +43,8 @@ public class HudJuego : MonoBehaviour
         textoAgua.text = $"Agua: {j.Agua}/{j.AguaMax}";
 
         string inventario = $"Tomates: {j.Tomates}   Huevos: {j.Huevos}";
+        if (j.TieneLlave)
+            inventario += $"   Semillas: {j.Semillas(Cultivo.Tomate)}";
         if (j.SemillasLegendarias > 0)
             inventario += $"   Semilla legendaria: {j.SemillasLegendarias}";
         if (j.BonusActivo)

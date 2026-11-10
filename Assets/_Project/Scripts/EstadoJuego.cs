@@ -9,6 +9,7 @@ public class DatosEstado
     public bool llave, tienePollo, polloVendido, polloAdulto;
     public int monedas, agua, tomates, huevos, semillas, cosechados, entregados;
     public int productoBonus;
+    public int[] semillasCultivo;   // una entrada por Cultivo
     public float segundosBonus;
 }
 public class EstadoJuego : MonoBehaviour
@@ -46,6 +47,7 @@ public class EstadoJuego : MonoBehaviour
     public float SegundosRestantesBonus => BonusActivo ? Mathf.Max(0f, finBonus - Time.time) : 0f;
 
     float finBonus;
+    readonly int[] semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
 
     public event Action OnCambio;
 
@@ -101,6 +103,24 @@ public class EstadoJuego : MonoBehaviour
         return true;
     }
 
+    // ---------- Semillas ----------
+
+    public int Semillas(Cultivo c) { return semillasCultivo[(int)c]; }
+
+    public void SumarSemillas(Cultivo c, int cantidad)
+    {
+        semillasCultivo[(int)c] += cantidad;
+        OnCambio?.Invoke();
+    }
+
+    public bool GastarSemilla(Cultivo c)
+    {
+        if (semillasCultivo[(int)c] <= 0) return false;
+        semillasCultivo[(int)c]--;
+        OnCambio?.Invoke();
+        return true;
+    }
+
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
@@ -125,6 +145,7 @@ public class EstadoJuego : MonoBehaviour
             cosechados = TomatesCosechados,
             entregados = TomatesEntregados,
             productoBonus = (int)ProductoBonus,
+            semillasCultivo = (int[])semillasCultivo.Clone(),
             segundosBonus = SegundosRestantesBonus
         };
     }
@@ -144,6 +165,10 @@ public class EstadoJuego : MonoBehaviour
         TomatesCosechados = d.cosechados;
         TomatesEntregados = d.entregados;
         ProductoBonus = (Producto)d.productoBonus;
+        System.Array.Clear(semillasCultivo, 0, semillasCultivo.Length);
+        if (d.semillasCultivo != null)
+            for (int i = 0; i < semillasCultivo.Length && i < d.semillasCultivo.Length; i++)
+                semillasCultivo[i] = d.semillasCultivo[i];
         finBonus = Time.time + d.segundosBonus;
         OnCambio?.Invoke();
     }

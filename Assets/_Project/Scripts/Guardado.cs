@@ -5,6 +5,7 @@ using UnityEngine;
 [Serializable]
 public class DatosGuardado
 {
+    public int version;          // 0 = partida anterior a las semillas
     public DatosEstado estado;
     public int tutorial;
     public int mision;
@@ -59,6 +60,7 @@ public class Guardado : MonoBehaviour
 
         var datos = new DatosGuardado
         {
+            version = 2,
             estado = juego.Exportar(),
             tutorial = tutorial.PasoActual,
             mision = mision.PasoActual,
@@ -78,12 +80,30 @@ public class Guardado : MonoBehaviour
         PlayerPrefs.Save();
     }
 
+    // Adapta partidas antiguas al formato actual.
+    static void Migrar(DatosGuardado d)
+    {
+        if (d.version >= 2) return;
+
+        // Se insertó el paso "BuscarSemillas" después de "Inactiva" en la misión.
+        if (d.mision >= 1) d.mision++;
+
+        // Quien ya tenía la llave jugaba con tomates ilimitados: se le dan semillas para seguir.
+        if (d.estado != null && d.estado.semillasCultivo == null)
+        {
+            d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+            if (d.estado.llave) d.estado.semillasCultivo[(int)Cultivo.Tomate] = 10;
+        }
+        d.version = 2;
+    }
+
     void Cargar()
     {
         if (!PlayerPrefs.HasKey(Clave)) return;
 
         var datos = JsonUtility.FromJson<DatosGuardado>(PlayerPrefs.GetString(Clave));
         if (datos == null) return;
+        Migrar(datos);
 
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.Importar(datos.estado);
         if (TutorialController.Instance != null) TutorialController.Instance.Restaurar(datos.tutorial);
