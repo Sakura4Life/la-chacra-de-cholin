@@ -1671,11 +1671,11 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EstadoJuego
   aguaMaxima: 12
-  precioTomate: 5
   precioHuevo: 8
   precioPollo: 50
   precioSemilla: 40
   segundosBonus: 120
+  semillasDePrueba: 0
 --- !u!4 &419971728
 Transform:
   m_ObjectHideFlags: 0
@@ -4557,6 +4557,7 @@ RectTransform:
   - {fileID: 210110279}
   - {fileID: 1451705106}
   - {fileID: 1702123243}
+  - {fileID: 1622055088}
   m_Father: {fileID: 1420355613}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -4608,15 +4609,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbb8ca9f116e21d48a704604e599aa60, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MisionController
-  tomatesPedido: 3
-  semillasTomateIniciales: 12
-  textoSemillas: "Cholin:\n\nAqu\xED tienes tus primeras {0} semillas de tomate.
-    Si\xE9mbralas en los huecos del huerto, ri\xE9galas con la regadera y espera
-    a que crezcan."
-  textoPedido: 'Pedido de la pizarra:
+  choclosPedido: 3
+  semillasChocloIniciales: 12
+  textoSemillasIniciales: "Cholin:\n\nAqu\xED tienes tus primeras {0} semillas de
+    choclo. Si\xE9mbralas tocando la tierra del huerto, ri\xE9galas con la regadera
+    y espera a que crezcan."
+  textoPedidoTutorial: 'Pedido de la pizarra:
 
 
-    Entrega {0} tomates en la caja de entrega.'
+    Entrega {0} choclos en la caja
+    de entrega.'
   textoPollito: "Nota nueva:\n\nSe escap\xF3 el pollito de la granja. Escucha con
     atenci\xF3n: debe estar cerca."
   textoGallinero: "Nota:\n\nEl pollito est\xE1 a salvo contigo. Ll\xE9valo al gallinero
@@ -7255,6 +7257,61 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1611970059}
   m_CullTransparentMesh: 1
+--- !u!1 &1622055087
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1622055088}
+  - component: {fileID: 1622055089}
+  m_Layer: 5
+  m_Name: SelectorSemillas
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1622055088
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622055087}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1064532114}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0}
+  m_AnchorMax: {x: 0.5, y: 0}
+  m_AnchoredPosition: {x: 0, y: 40}
+  m_SizeDelta: {x: 1000, y: 140}
+  m_Pivot: {x: 0.5, y: 0}
+--- !u!114 &1622055089
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1622055087}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f04f0fd2c72bad841b2f97de76856a89, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SelectorSemillas
+  tamanoBoton: {x: 230, y: 110}
+  separacion: 14
+  tamanoTexto: 34
+  colorNormal: {r: 0.1, g: 0.1, b: 0.1, a: 0.65}
+  colorElegido: {r: 0.96, g: 0.76, b: 0.2, a: 0.95}
+  textoNormal: {r: 1, g: 1, b: 1, a: 1}
+  textoElegido: {r: 0.12, g: 0.08, b: 0.02, a: 1}
 --- !u!1 &1627906836
 GameObject:
   m_ObjectHideFlags: 0

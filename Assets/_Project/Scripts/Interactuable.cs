@@ -124,11 +124,11 @@ public class Interactuable : MonoBehaviour
 
         if (!juego.HayParaVender)
         {
-            tutorial.Avisar("No tienes nada para entregar. Cosecha tomates o recoge huevos.");
+            tutorial.Avisar("No tienes nada para entregar. Cosecha cultivos o recoge huevos.");
             return;
         }
 
-        int monedas = juego.VenderTodo(out int tomates, out int huevos);
-        tutorial.Avisar($"Entregaste {tomates} tomate(s) y {huevos} huevo(s): +{monedas} monedas");
+        int monedas = juego.VenderTodo(out int cultivos, out int huevos);
+        tutorial.Avisar($"Entregaste {cultivos} cultivo(s) y {huevos} huevo(s): +{monedas} monedas");
     }
 }

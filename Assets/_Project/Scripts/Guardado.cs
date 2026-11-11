@@ -60,7 +60,7 @@ public class Guardado : MonoBehaviour
 
         var datos = new DatosGuardado
         {
-            version = 2,
+            version = 3,
             estado = juego.Exportar(),
             tutorial = tutorial.PasoActual,
             mision = mision.PasoActual,
@@ -83,18 +83,33 @@ public class Guardado : MonoBehaviour
     // Adapta partidas antiguas al formato actual.
     static void Migrar(DatosGuardado d)
     {
-        if (d.version >= 2) return;
-
-        // Se insertó el paso "BuscarSemillas" después de "Inactiva" en la misión.
-        if (d.mision >= 1) d.mision++;
-
-        // Quien ya tenía la llave jugaba con tomates ilimitados: se le dan semillas para seguir.
-        if (d.estado != null && d.estado.semillasCultivo == null)
+        if (d.version < 2)
         {
-            d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
-            if (d.estado.llave) d.estado.semillasCultivo[(int)Cultivo.Tomate] = 10;
+            // Se insertó el paso "BuscarSemillas" después de "Inactiva" en la misión.
+            if (d.mision >= 1) d.mision++;
+
+            // Quien ya tenía la llave jugaba con tomates ilimitados: se le dan semillas para seguir.
+            if (d.estado != null && d.estado.semillasCultivo == null)
+            {
+                d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+                if (d.estado.llave) d.estado.semillasCultivo[(int)Cultivo.Tomate] = 10;
+            }
+            d.version = 2;
         }
-        d.version = 2;
+
+        if (d.version < 3)
+        {
+            // Fase 12b: el cultivo inicial pasó a ser el choclo y la gallina solo come choclo.
+            // Quien ya tenía la llave recibe 12 semillas de choclo (las mismas que da Cholin).
+            // Las cosechas por cultivo y los cultivos desbloqueados los calcula EstadoJuego.Importar.
+            if (d.estado != null && d.estado.llave)
+            {
+                if (d.estado.semillasCultivo == null || d.estado.semillasCultivo.Length < System.Enum.GetValues(typeof(Cultivo)).Length)
+                    d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+                d.estado.semillasCultivo[(int)Cultivo.Maiz] += 12;
+            }
+            d.version = 3;
+        }
     }
 
     void Cargar()

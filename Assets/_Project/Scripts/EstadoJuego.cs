@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
 
-public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria }
+// Los productos nuevos van al final para no alterar los valores ya guardados.
+public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria, Maiz, Arroz, Papa }
 
 [Serializable]
 public class DatosEstado
@@ -10,8 +11,12 @@ public class DatosEstado
     public int monedas, agua, tomates, huevos, semillas, cosechados, entregados;
     public int productoBonus;
     public int[] semillasCultivo;   // una entrada por Cultivo
+    public int[] cosecha;           // una entrada por Cultivo (null = partida anterior a la 12b)
+    public int desbloqueados;       // bits: un 1 en la posición de cada cultivo que ya se obtuvo
+    public int cultivoSeleccionado;
     public float segundosBonus;
 }
+
 public class EstadoJuego : MonoBehaviour
 {
     public static EstadoJuego Instance { get; private set; }
@@ -19,8 +24,7 @@ public class EstadoJuego : MonoBehaviour
     [Header("Agua")]
     [SerializeField] int aguaMaxima = 3;
 
-    [Header("Precios base (provisionales)")]
-    [SerializeField] int precioTomate = 5;
+    [Header("Precios base (provisionales). Los cultivos están en CultivoDatos")]
     [SerializeField] int precioHuevo = 8;
     [SerializeField] int precioPollo = 50;
     [SerializeField] int precioSemilla = 40;
@@ -28,30 +32,59 @@ public class EstadoJuego : MonoBehaviour
     [Header("Bonificador")]
     [SerializeField] float segundosBonus = 120f;
 
+    [Header("Pruebas en el editor y en el celular")]
+    [Tooltip("Solo para probar: al iniciar suma 5 semillas de cada cultivo (se guardan en la partida). Desmárcalo al terminar.")]
+    [SerializeField] bool semillasDePrueba;
+
+    static readonly int NumCultivos = Enum.GetValues(typeof(Cultivo)).Length;
+
     public bool TieneLlave { get; private set; }
     public int Monedas { get; private set; }
     public int Agua { get; private set; }
-    public int Tomates { get; private set; }
     public int Huevos { get; private set; }
     public int SemillasLegendarias { get; private set; }
-    public int TomatesCosechados { get; private set; }
-    public int TomatesEntregados { get; private set; }
+    public int CosechasTotales { get; private set; }
+    public int CultivosEntregados { get; private set; }
     public bool TienePollo { get; private set; }
     public bool PolloVendido { get; private set; }
     public bool PolloAdulto { get; private set; }
     public Producto ProductoBonus { get; private set; } = Producto.Ninguno;
+    public Cultivo CultivoSeleccionado { get; private set; } = Cultivo.Maiz;
+
+    // Compatibilidad con la tienda actual (se reemplaza en la 12b-2).
+    public int Tomates => Cosecha(Cultivo.Tomate);
 
     public int AguaMax => aguaMaxima;
-    public bool HayParaVender => Tomates > 0 || Huevos > 0;
     public bool BonusActivo => ProductoBonus != Producto.Ninguno;
     public float SegundosRestantesBonus => BonusActivo ? Mathf.Max(0f, finBonus - Time.time) : 0f;
 
+    public bool HayParaVender
+    {
+        get
+        {
+            if (Huevos > 0) return true;
+            foreach (int n in cosecha) if (n > 0) return true;
+            return false;
+        }
+    }
+
     float finBonus;
-    readonly int[] semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+    readonly int[] semillasCultivo = new int[NumCultivos];
+    readonly int[] cosecha = new int[NumCultivos];
+    int desbloqueados;
 
     public event Action OnCambio;
 
     void Awake() { Instance = this; }
+
+    // Espera dos fotogramas para que la partida guardada ya esté cargada y no pise las semillas de prueba.
+    System.Collections.IEnumerator Start()
+    {
+        yield return null;
+        yield return null;
+        if (!semillasDePrueba) yield break;
+        foreach (var c in CultivoDatos.Todos) SumarSemillas(c, 5);
+    }
     void OnDestroy() { if (Instance == this) Instance = null; }
 
     void Update()
@@ -65,9 +98,9 @@ public class EstadoJuego : MonoBehaviour
 
     public static string NombreProducto(Producto p)
     {
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.Plural(c);
         switch (p)
         {
-            case Producto.Tomate: return "tomates";
             case Producto.Huevo: return "huevos";
             case Producto.Pollo: return "pollo";
             case Producto.SemillaLegendaria: return "semilla legendaria";
@@ -88,17 +121,21 @@ public class EstadoJuego : MonoBehaviour
         return true;
     }
 
-    public void SumarTomates(int cantidad)
+    // ---------- Cosechas ----------
+
+    public int Cosecha(Cultivo c) { return cosecha[(int)c]; }
+
+    public void SumarCosecha(Cultivo c, int cantidad)
     {
-        Tomates += cantidad;
-        TomatesCosechados += cantidad;
+        cosecha[(int)c] += cantidad;
+        CosechasTotales += cantidad;
         OnCambio?.Invoke();
     }
 
-    public bool GastarTomate()
+    public bool GastarCosecha(Cultivo c)
     {
-        if (Tomates <= 0) return false;
-        Tomates--;
+        if (cosecha[(int)c] <= 0) return false;
+        cosecha[(int)c]--;
         OnCambio?.Invoke();
         return true;
     }
@@ -107,9 +144,14 @@ public class EstadoJuego : MonoBehaviour
 
     public int Semillas(Cultivo c) { return semillasCultivo[(int)c]; }
 
+    // Un cultivo se "desbloquea" la primera vez que se obtienen semillas suyas.
+    public bool Desbloqueado(Cultivo c) { return (desbloqueados & (1 << (int)c)) != 0; }
+
     public void SumarSemillas(Cultivo c, int cantidad)
     {
         semillasCultivo[(int)c] += cantidad;
+        if (cantidad > 0) desbloqueados |= 1 << (int)c;
+        AjustarSeleccion();
         OnCambio?.Invoke();
     }
 
@@ -117,8 +159,29 @@ public class EstadoJuego : MonoBehaviour
     {
         if (semillasCultivo[(int)c] <= 0) return false;
         semillasCultivo[(int)c]--;
+        AjustarSeleccion();
         OnCambio?.Invoke();
         return true;
+    }
+
+    // Solo se puede elegir un cultivo del que tengas semillas.
+    public void SeleccionarCultivo(Cultivo c)
+    {
+        if (Semillas(c) <= 0 || CultivoSeleccionado == c) return;
+        CultivoSeleccionado = c;
+        OnCambio?.Invoke();
+    }
+
+    // Si el cultivo elegido se queda sin semillas, pasa al primero que sí tenga (en el orden de CultivoDatos.Todos).
+    void AjustarSeleccion()
+    {
+        if (semillasCultivo[(int)CultivoSeleccionado] > 0) return;
+        foreach (var c in CultivoDatos.Todos)
+        {
+            if (semillasCultivo[(int)c] <= 0) continue;
+            CultivoSeleccionado = c;
+            return;
+        }
     }
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
@@ -139,13 +202,16 @@ public class EstadoJuego : MonoBehaviour
             polloAdulto = PolloAdulto,
             monedas = Monedas,
             agua = Agua,
-            tomates = Tomates,
+            tomates = Cosecha(Cultivo.Tomate),
             huevos = Huevos,
             semillas = SemillasLegendarias,
-            cosechados = TomatesCosechados,
-            entregados = TomatesEntregados,
+            cosechados = CosechasTotales,
+            entregados = CultivosEntregados,
             productoBonus = (int)ProductoBonus,
             semillasCultivo = (int[])semillasCultivo.Clone(),
+            cosecha = (int[])cosecha.Clone(),
+            desbloqueados = desbloqueados,
+            cultivoSeleccionado = (int)CultivoSeleccionado,
             segundosBonus = SegundosRestantesBonus
         };
     }
@@ -159,16 +225,43 @@ public class EstadoJuego : MonoBehaviour
         PolloAdulto = d.polloAdulto;
         Monedas = d.monedas;
         Agua = d.agua;
-        Tomates = d.tomates;
         Huevos = d.huevos;
         SemillasLegendarias = d.semillas;
-        TomatesCosechados = d.cosechados;
-        TomatesEntregados = d.entregados;
+        CosechasTotales = d.cosechados;
+        CultivosEntregados = d.entregados;
         ProductoBonus = (Producto)d.productoBonus;
-        System.Array.Clear(semillasCultivo, 0, semillasCultivo.Length);
+
+        Array.Clear(semillasCultivo, 0, semillasCultivo.Length);
         if (d.semillasCultivo != null)
             for (int i = 0; i < semillasCultivo.Length && i < d.semillasCultivo.Length; i++)
                 semillasCultivo[i] = d.semillasCultivo[i];
+
+        Array.Clear(cosecha, 0, cosecha.Length);
+        bool anterior = d.cosecha == null;     // partida guardada antes de la 12b
+        if (anterior)
+            cosecha[(int)Cultivo.Tomate] = d.tomates;
+        else
+            for (int i = 0; i < cosecha.Length && i < d.cosecha.Length; i++)
+                cosecha[i] = d.cosecha[i];
+
+        desbloqueados = d.desbloqueados;
+        if (anterior)
+        {
+            // Se consideran desbloqueados los cultivos de los que ya había semillas o cosecha.
+            for (int i = 0; i < NumCultivos; i++)
+                if (semillasCultivo[i] > 0 || cosecha[i] > 0) desbloqueados |= 1 << i;
+        }
+
+        var elegido = (Cultivo)Mathf.Clamp(d.cultivoSeleccionado, 0, NumCultivos - 1);
+        if (anterior || !Desbloqueado(elegido))
+        {
+            elegido = Cultivo.Maiz;
+            foreach (var c in CultivoDatos.Todos)
+                if (Desbloqueado(c)) { elegido = c; break; }
+        }
+        CultivoSeleccionado = elegido;
+        AjustarSeleccion();
+
         finBonus = Time.time + d.segundosBonus;
         OnCambio?.Invoke();
     }
@@ -177,9 +270,9 @@ public class EstadoJuego : MonoBehaviour
 
     public int Cantidad(Producto p)
     {
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) return Cosecha(c);
         switch (p)
         {
-            case Producto.Tomate: return Tomates;
             case Producto.Huevo: return Huevos;
             case Producto.Pollo: return TienePollo ? 1 : 0;
             case Producto.SemillaLegendaria: return SemillasLegendarias;
@@ -189,9 +282,9 @@ public class EstadoJuego : MonoBehaviour
 
     public int PrecioBase(Producto p)
     {
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.PrecioVenta(c);
         switch (p)
         {
-            case Producto.Tomate: return precioTomate;
             case Producto.Huevo: return precioHuevo;
             case Producto.Pollo: return precioPollo;
             case Producto.SemillaLegendaria: return precioSemilla;
@@ -212,12 +305,15 @@ public class EstadoJuego : MonoBehaviour
 
         int total = cantidad * PrecioBase(p) * Multiplicador(p);
 
-        switch (p)
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) cosecha[(int)c] = 0;
+        else
         {
-            case Producto.Tomate: Tomates = 0; break;
-            case Producto.Huevo: Huevos = 0; break;
-            case Producto.Pollo: TienePollo = false; PolloVendido = true; break;
-            case Producto.SemillaLegendaria: SemillasLegendarias = 0; break;
+            switch (p)
+            {
+                case Producto.Huevo: Huevos = 0; break;
+                case Producto.Pollo: TienePollo = false; PolloVendido = true; break;
+                case Producto.SemillaLegendaria: SemillasLegendarias = 0; break;
+            }
         }
 
         Monedas += total;
@@ -225,17 +321,28 @@ public class EstadoJuego : MonoBehaviour
         return total;
     }
 
-    // Venta de la caja de entrega (pedidos): tomates y huevos, con el bonificador si corresponde.
-    public int VenderTodo(out int tomates, out int huevos)
+    // Venta provisional de la caja de entrega: todos los cultivos y los huevos
+    // (se reemplaza por el panel de pedidos en la 12b-3).
+    public int VenderTodo(out int cultivos, out int huevos)
     {
-        tomates = Tomates;
+        cultivos = 0;
+        int total = 0;
+        foreach (var c in CultivoDatos.Todos)
+        {
+            int n = cosecha[(int)c];
+            if (n <= 0) continue;
+            var p = CultivoDatos.ProductoDe(c);
+            total += n * CultivoDatos.PrecioVenta(c) * Multiplicador(p);
+            cultivos += n;
+            cosecha[(int)c] = 0;
+        }
+
         huevos = Huevos;
-        int total = tomates * precioTomate * Multiplicador(Producto.Tomate)
-                  + huevos * precioHuevo * Multiplicador(Producto.Huevo);
-        Tomates = 0;
+        total += huevos * precioHuevo * Multiplicador(Producto.Huevo);
         Huevos = 0;
+
         Monedas += total;
-        TomatesEntregados += tomates;
+        CultivosEntregados += cultivos;
         OnCambio?.Invoke();
         return total;
     }
@@ -244,7 +351,8 @@ public class EstadoJuego : MonoBehaviour
     public bool ActivarBonus(Producto p, out string motivo)
     {
         motivo = "";
-        if (p != Producto.Tomate && p != Producto.Huevo && p != Producto.Pollo)
+        bool valido = p == Producto.Huevo || p == Producto.Pollo || CultivoDatos.EsCultivo(p, out _);
+        if (!valido)
         {
             motivo = "Ese producto no admite bonificador.";
             return false;

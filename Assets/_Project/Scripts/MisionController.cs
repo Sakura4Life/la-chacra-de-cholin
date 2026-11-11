@@ -12,19 +12,20 @@ public class MisionController : MonoBehaviour
         PollitoActiva, PollitoEncontrado, PollitoEnGallinero, Libre
     }
 
-    [SerializeField] int tomatesPedido = 3;
-    [Tooltip("Semillas de tomate que Cholin entrega al tocar el granero.")]
-    [SerializeField] int semillasTomateIniciales = 10;
+    [Tooltip("Choclos que pide el primer pedido de la pizarra.")]
+    [SerializeField] int choclosPedido = 3;
+    [Tooltip("Semillas de choclo que Cholin entrega al tocar el granero.")]
+    [SerializeField] int semillasChocloIniciales = 12;
 
     [TextArea(3, 6)]
     [SerializeField]
-    string textoSemillas =
-        "Cholin:\n\nAquí tienes tus primeras {0} semillas de tomate. Siémbralas en los huecos del huerto, riégalas con la regadera y espera a que crezcan.";
+    string textoSemillasIniciales =
+        "Cholin:\n\nAquí tienes tus primeras {0} semillas de choclo. Siémbralas tocando la tierra del huerto, riégalas con la regadera y espera a que crezcan.";
 
     [TextArea(3, 6)]
     [SerializeField]
-    string textoPedido =
-        "Pedido de la pizarra:\n\nEntrega {0} tomates en la caja de entrega.";
+    string textoPedidoTutorial =
+        "Pedido de la pizarra:\n\nEntrega {0} choclos en la caja de entrega.";
 
     [TextArea(3, 6)]
     [SerializeField]
@@ -111,7 +112,7 @@ public class MisionController : MonoBehaviour
                 IrA(Paso.LeyendoPedido);
                 return true;
             case Paso.EntregandoPedido:
-                Nota(string.Format(textoPedido, tomatesPedido), null);
+                Nota(string.Format(textoPedidoTutorial, choclosPedido), null);
                 return true;
             case Paso.AvisoPollito:
                 IrA(Paso.LeyendoPollito);
@@ -138,9 +139,9 @@ public class MisionController : MonoBehaviour
 
         // Primero se entregan las semillas y se cambia de paso, para que un doble toque no las duplique.
         if (EstadoJuego.Instance != null)
-            EstadoJuego.Instance.SumarSemillas(Cultivo.Tomate, semillasTomateIniciales);
+            EstadoJuego.Instance.SumarSemillas(Cultivo.Maiz, semillasChocloIniciales);
         IrA(Paso.EsperandoCosecha);
-        Nota(string.Format(textoSemillas, semillasTomateIniciales), null);
+        Nota(string.Format(textoSemillasIniciales, semillasChocloIniciales), null);
         Ajustes.Vibrar();
         return true;
     }
@@ -185,7 +186,7 @@ public class MisionController : MonoBehaviour
                 break;
 
             case Paso.EsperandoCosecha:
-                if (juego.TomatesCosechados >= 1) IrA(Paso.AvisoPedido);
+                if (juego.CosechasTotales >= 1) IrA(Paso.AvisoPedido);
                 break;
 
             case Paso.PollitoEnGallinero:
@@ -194,8 +195,8 @@ public class MisionController : MonoBehaviour
 
             case Paso.EntregandoPedido:
                 {
-                    int entregados = juego.TomatesEntregados - entregadosBase;
-                    if (entregados >= tomatesPedido) IrA(Paso.AvisoPollito);
+                    int entregados = juego.CultivosEntregados - entregadosBase;
+                    if (entregados >= choclosPedido) IrA(Paso.AvisoPollito);
                     else FijarPista(TextoProgreso(entregados));
                     break;
                 }
@@ -213,17 +214,17 @@ public class MisionController : MonoBehaviour
                 FijarPista("Cholin te espera en el granero que brilla. Tócalo para recibir tus semillas.");
                 break;
             case Paso.EsperandoCosecha:
-                FijarPista("Siembra: toca un hueco del huerto, riégalo y espera a que crezca.");
+                FijarPista("Siembra: toca la tierra del huerto, riega la semilla y espera a que crezca el choclo.");
                 break;
             case Paso.AvisoPedido:
                 FijarPista("Hay un pedido nuevo en la pizarra. Tócala.");
                 break;
             case Paso.LeyendoPedido:
                 FijarPista("");
-                Nota(string.Format(textoPedido, tomatesPedido), () => IrA(Paso.EntregandoPedido));
+                Nota(string.Format(textoPedidoTutorial, choclosPedido), () => IrA(Paso.EntregandoPedido));
                 break;
             case Paso.EntregandoPedido:
-                entregadosBase = EstadoJuego.Instance != null ? EstadoJuego.Instance.TomatesEntregados : 0;
+                entregadosBase = EstadoJuego.Instance != null ? EstadoJuego.Instance.CultivosEntregados : 0;
                 FijarPista(TextoProgreso(0));
                 break;
             case Paso.AvisoPollito:
@@ -240,7 +241,7 @@ public class MisionController : MonoBehaviour
                 FijarPista("Arrastra al pollito con el dedo hasta el gallinero que brilla.");
                 break;
             case Paso.PollitoEnGallinero:
-                FijarPista("Dale un tomate al pollito: tócalo para alimentarlo.");
+                FijarPista("Dale un choclo al pollito: tócalo para alimentarlo.");
                 break;
             case Paso.Libre:
                 FijarPista("");
@@ -261,7 +262,7 @@ public class MisionController : MonoBehaviour
 
     string TextoProgreso(int entregados)
     {
-        return $"Pedido: entrega {tomatesPedido} tomates en la caja ({entregados}/{tomatesPedido})";
+        return $"Pedido: entrega {choclosPedido} choclos en la caja ({entregados}/{choclosPedido})";
     }
 
     static void FijarPista(string texto)

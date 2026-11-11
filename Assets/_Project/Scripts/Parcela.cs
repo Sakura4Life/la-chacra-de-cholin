@@ -3,23 +3,12 @@ using UnityEngine;
 
 // Un hueco de cultivo. Varios huecos forman un Terreno.
 // Ciclo: sembrar -> regar -> crece -> cosechar.
-// Sembrar lo dispara el Terreno (toque sobre la tierra); regar y cosechar, el toque sobre la planta.
+// Sembrar y regar lo dispara el Terreno (toque sobre la tierra); regar y cosechar, el toque sobre la planta.
+// Los modelos (semilla y etapas) NO están en el prefab: se crean al sembrar desde el CatalogoVisual
+// y se destruyen al cosechar, según el cultivo elegido en el selector.
 public class Parcela : MonoBehaviour
 {
     enum Estado { Bloqueada, Vacia, Seca, Creciendo, Lista }
-
-    [Header("Visual del hueco")]
-    [Tooltip("Opcional. Si lo dejas vacío no pasa nada.")]
-    [SerializeField] Renderer marcador;
-    [Tooltip("Semilla que se ve al sembrar, antes de regar.")]
-    [SerializeField] GameObject semilla;
-    [Header("Etapas de la planta (modelos hijos del hueco)")]
-    [Tooltip("Etapa 1: brote. Se ve en la primera mitad del crecimiento.")]
-    [SerializeField] Transform brote;
-    [Tooltip("Etapa 2: planta joven. Se ve en la segunda mitad del crecimiento.")]
-    [SerializeField] Transform joven;
-    [Tooltip("Etapa 3: planta con fruto. Se ve cuando está lista para cosechar.")]
-    [SerializeField] Transform madura;
 
     [Header("Zona de toque")]
     [Tooltip("Collider del hueco. Si lo dejas vacío usa el que tenga este objeto. Solo está activo cuando hay semilla o planta.")]
@@ -28,30 +17,26 @@ public class Parcela : MonoBehaviour
     [SerializeField, Range(0.2f, 1f)] float factorAlturaSemilla = 0.5f;
 
     [Header("Crecimiento")]
-    [SerializeField] float segundosCrecimiento = 8f;
-    [Tooltip("Tamaño con el que empieza a crecer, de 0 a 1 respecto al tamaño final.")]
+    [Tooltip("Multiplica el tiempo de crecimiento de cada cultivo (CultivoDatos). 1 = tiempos normales, 0.5 = el doble de rápido.")]
+    [SerializeField] float multiplicadorTiempo = 1f;
+    [Tooltip("Tamaño con el que empieza cada etapa, de 0 a 1 respecto a su tamaño final.")]
     [SerializeField, Range(0.05f, 1f)] float escalaInicialEtapa = 0.6f;
-    [SerializeField] int tomatesPorCosecha = 1;
+    [SerializeField] int cosechaPorHueco = 1;
     [SerializeField] float duracionAparicion = 0.3f;
 
-    // Por ahora todos los huecos siembran tomate; en la 12b se elegirá desde el selector.
-    const Cultivo cultivo = Cultivo.Tomate;
+    // Nombres de los hijos que antes se colocaban a mano en cada hueco (versión anterior del prefab).
+    static readonly string[] HijosAntiguos = { "Marcador", "Semilla", "Brote", "Joven", "Madura" };
 
-    static readonly int[] IdsColor =
-    {
-        Shader.PropertyToID("_BaseColor"),
-        Shader.PropertyToID("baseColorFactor"),
-        Shader.PropertyToID("_Color"),
-    };
-
-    MaterialPropertyBlock bloque;
+    CatalogoVisual catalogo;
+    GameObject semilla;
+    Transform brote, joven, madura;
     Vector3 escalaBrote = Vector3.one;
     Vector3 escalaJoven = Vector3.one;
     Vector3 escalaMadura = Vector3.one;
     CapsuleCollider capsula;
     float alturaCapsula;
     float centroYCapsula;
-    int idColor = -1;
+    Cultivo cultivo = Cultivo.Maiz;
     Estado estado = Estado.Bloqueada;
 
     // Los usa el Terreno para elegir dónde sembrar.
@@ -63,10 +48,12 @@ public class Parcela : MonoBehaviour
 
     void Awake()
     {
-        bloque = new MaterialPropertyBlock();
-        if (brote != null) escalaBrote = brote.localScale;
-        if (joven != null) escalaJoven = joven.localScale;
-        if (madura != null) escalaMadura = madura.localScale;
+        LimpiarHijosAntiguos();
+
+        catalogo = GetComponentInParent<CatalogoVisual>(true);
+        if (catalogo == null) catalogo = FindFirstObjectByType<CatalogoVisual>();
+        if (catalogo == null)
+            Debug.LogWarning("[Parcela] No hay un CatalogoVisual en la escena: los cultivos no se verán.", this);
 
         if (colision == null) colision = GetComponent<Collider>();
         capsula = colision as CapsuleCollider;
@@ -74,12 +61,6 @@ public class Parcela : MonoBehaviour
         {
             alturaCapsula = capsula.height;
             centroYCapsula = capsula.center.y;
-        }
-
-        if (marcador != null && marcador.sharedMaterial != null)
-        {
-            foreach (int id in IdsColor)
-                if (marcador.sharedMaterial.HasProperty(id)) { idColor = id; break; }
         }
     }
 
@@ -108,6 +89,18 @@ public class Parcela : MonoBehaviour
         }
     }
 
+    // Borra los modelos que quedaron como hijos fijos del hueco; ahora se crean por código.
+    void LimpiarHijosAntiguos()
+    {
+        for (int i = transform.childCount - 1; i >= 0; i--)
+        {
+            Transform hijo = transform.GetChild(i);
+            if (System.Array.IndexOf(HijosAntiguos, hijo.name) < 0) continue;
+            hijo.gameObject.SetActive(false);
+            Destroy(hijo.gameObject);
+        }
+    }
+
     // En un hueco vacío lo llama el Terreno (siembra); en uno ocupado, el toque directo sobre la planta.
     public void Tocar()
     {
@@ -119,19 +112,7 @@ public class Parcela : MonoBehaviour
                 break;
 
             case Estado.Vacia:
-                if (juego == null || !juego.GastarSemilla(cultivo))
-                {
-                    bool buscando = MisionController.Instance != null && MisionController.Instance.BuscandoSemillas;
-                    Avisar(buscando
-                        ? "Primero toca el granero que brilla: allí están tus semillas."
-                        : "No tienes semillas de tomate.");
-                    break;
-                }
-                estado = Estado.Seca;
-                Aplicar(0f);
-                Avisar(juego.Agua > 0
-                    ? "Sembraste. Toca la semilla para regarla."
-                    : "Sembraste. Ahora toca el pozo para llenar la regadera.");
+                Sembrar(juego);
                 break;
 
             case Estado.Seca:
@@ -149,27 +130,89 @@ public class Parcela : MonoBehaviour
                 break;
 
             case Estado.Lista:
-                if (juego != null) juego.SumarTomates(tomatesPorCosecha);
-                estado = Estado.Vacia;
-                Aplicar(0f);
-                Avisar($"¡Cosechaste {tomatesPorCosecha} tomate!");
+                Cosechar(juego);
                 break;
         }
     }
 
+    void Sembrar(EstadoJuego juego)
+    {
+        if (juego == null) return;
+
+        Cultivo elegido = juego.CultivoSeleccionado;
+        if (!juego.GastarSemilla(elegido))
+        {
+            bool buscando = MisionController.Instance != null && MisionController.Instance.BuscandoSemillas;
+            Avisar(buscando
+                ? "Primero toca el granero que brilla: allí están tus semillas."
+                : $"No tienes semillas de {CultivoDatos.Nombre(elegido)}.");
+            return;
+        }
+
+        cultivo = elegido;
+        CrearVisual();
+        estado = Estado.Seca;
+        Aplicar(0f);
+        Avisar(juego.Agua > 0
+            ? "Sembraste. Toca la semilla para regarla."
+            : "Sembraste. Ahora toca el pozo para llenar la regadera.");
+    }
+
+    void Cosechar(EstadoJuego juego)
+    {
+        if (juego != null) juego.SumarCosecha(cultivo, cosechaPorHueco);
+        string nombre = cosechaPorHueco == 1 ? CultivoDatos.Nombre(cultivo) : CultivoDatos.Plural(cultivo);
+        Avisar($"¡Cosechaste {cosechaPorHueco} {nombre}!");
+
+        DestruirVisual();
+        estado = Estado.Vacia;
+        Aplicar(0f);
+    }
+
+    // ---------- Modelos ----------
+
+    void CrearVisual()
+    {
+        DestruirVisual();
+        var datos = catalogo != null ? catalogo.De(cultivo) : null;
+        if (datos == null) return;
+
+        Transform s = CatalogoVisual.Crear(datos.semilla, transform, "Visual_Semilla");
+        semilla = s != null ? s.gameObject : null;
+
+        brote = CatalogoVisual.Crear(datos.brote, transform, "Visual_Brote");
+        joven = CatalogoVisual.Crear(datos.joven, transform, "Visual_Joven");
+        madura = CatalogoVisual.Crear(datos.madura, transform, "Visual_Madura");
+
+        if (brote != null) escalaBrote = brote.localScale;
+        if (joven != null) escalaJoven = joven.localScale;
+        if (madura != null) escalaMadura = madura.localScale;
+    }
+
+    void DestruirVisual()
+    {
+        if (semilla != null) Destroy(semilla);
+        if (brote != null) Destroy(brote.gameObject);
+        if (joven != null) Destroy(joven.gameObject);
+        if (madura != null) Destroy(madura.gameObject);
+        semilla = null;
+        brote = joven = madura = null;
+    }
+
     IEnumerator Crecer()
     {
+        float duracion = Mathf.Max(0.1f, CultivoDatos.SegundosCrecimiento(cultivo) * multiplicadorTiempo);
         float t = 0f;
         while (t < 1f)
         {
-            t += Time.deltaTime / Mathf.Max(0.1f, segundosCrecimiento);
+            t += Time.deltaTime / duracion;
             Aplicar(Mathf.Clamp01(t));
             yield return null;
         }
         estado = Estado.Lista;
         Aplicar(1f);
         if (madura != null) StartCoroutine(Aparecer(madura, escalaMadura));
-        Avisar("¡Está lista! Tócala para cosechar.");
+        Avisar($"¡Está lista! Toca el {CultivoDatos.Nombre(cultivo)} para cosecharlo.");
     }
 
     IEnumerator Aparecer(Transform t, Vector3 escalaFinal)
@@ -179,27 +222,16 @@ public class Parcela : MonoBehaviour
         while (x < d)
         {
             x += Time.deltaTime;
-            if (estado != Estado.Lista) yield break;
+            if (estado != Estado.Lista || t == null) yield break;
             float k = Mathf.Clamp01(x / d);
             t.localScale = escalaFinal * (Mathf.Sin(k * Mathf.PI * 0.5f) + 0.15f * Mathf.Sin(k * Mathf.PI));
             yield return null;
         }
-        t.localScale = escalaFinal;
+        if (t != null) t.localScale = escalaFinal;
     }
 
     void Aplicar(float progreso)
     {
-        Color colorMarcador =
-            estado == Estado.Bloqueada ? new Color(0.30f, 0.30f, 0.30f) :
-            estado == Estado.Creciendo ? new Color(0.20f, 0.12f, 0.06f) :
-                                         new Color(0.40f, 0.25f, 0.12f);
-        if (marcador != null && idColor != -1)
-        {
-            bloque.Clear();
-            bloque.SetColor(idColor, colorMarcador);
-            marcador.SetPropertyBlock(bloque);
-        }
-
         if (semilla != null) semilla.SetActive(estado == Estado.Seca);
 
         bool creciendo = estado == Estado.Creciendo;

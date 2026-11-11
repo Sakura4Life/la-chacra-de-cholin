@@ -46,7 +46,7 @@ public class Gallina : MonoBehaviour
     [SerializeField] float giroGrados = 360f;
 
     [Header("Pruebas en el editor")]
-    [Tooltip("Solo para probar en Play: no gasta tomates. Desmárcalo al terminar.")]
+    [Tooltip("Solo para probar en Play: no gasta choclos. Desmárcalo al terminar.")]
     [SerializeField] bool modoPrueba;
 
     Estado estado = Estado.Hambrienta;
@@ -100,13 +100,14 @@ public class Gallina : MonoBehaviour
                     Avisar("Hay muchos huevos esperando. Recógelos tocando el gallinero o un huevo.");
                     break;
                 }
-                bool hayTomate = modoPrueba || (juego != null && juego.GastarTomate());
-                if (hayTomate)
+                // La gallina solo come choclo.
+                bool hayChoclo = modoPrueba || (juego != null && juego.GastarCosecha(Cultivo.Maiz));
+                if (hayChoclo)
                 {
                     StartCoroutine(Comer());
                     Avisar("Está comiendo y creciendo. En un rato pondrá un huevo.");
                 }
-                else Avisar("Tiene hambre. Cosecha un tomate para alimentarlo.");
+                else Avisar("Tiene hambre. Cosecha un choclo para alimentarlo.");
                 break;
 
             case Estado.Comiendo:
