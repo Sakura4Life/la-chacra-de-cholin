@@ -3684,6 +3684,7 @@ GameObject:
   - component: {fileID: 4392805284154835350}
   - component: {fileID: 5578697742680295504}
   - component: {fileID: 7888863094178884171}
+  - component: {fileID: 5825289347356866461}
   m_Layer: 0
   m_Name: CajaEntrega
   m_TagString: Untagged
@@ -3814,6 +3815,37 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.100686006, y: 0.074636385, z: 0.15302618}
   m_Center: {x: 0.0017276295, y: 0.036253206, z: 0.009116195}
+--- !u!114 &5825289347356866461
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7866392605978733449}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 02074e99aae03cc499f1540a08809917, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PedidosCaja
+  modeloMaiz: {fileID: -3310981326811454589, guid: c1727ea2974ef95458d7b87a891fd53d, type: 3}
+  modeloTomate: {fileID: 1425431256348707881, guid: 568e5b21c75b4084a91c50f648382a79, type: 3}
+  modeloPapa: {fileID: 5861069733216532766, guid: f292713a5a6ab314ea628410106f9eff, type: 3}
+  modeloArroz: {fileID: 4874854502988560431, guid: a6792c82903acb7478d545543e402be6, type: 3}
+  modeloHuevo: {fileID: 5418224080440429131, guid: 25903ae37c497564383eb85b0871d443, type: 3}
+  tamanoModelo: 0.03
+  tamanoHuevo: 0.018
+  modeloCaja: {fileID: 0}
+  ocupacionArea: 0.5
+  alturaFondo: 0.12
+  alturaCaida: 0.12
+  segundosCaida: 0.6
+  separacionCaida: 0.12
+  maxPorCultivo: 3
+  maxHuevos: 2
+  segundosSalida: 0.5
+  segundosEspera: 0.6
+  segundosEntrada: 0.45
+  alturaSalida: 0.08
 --- !u!1 &7917990511413729844
 GameObject:
   m_ObjectHideFlags: 0

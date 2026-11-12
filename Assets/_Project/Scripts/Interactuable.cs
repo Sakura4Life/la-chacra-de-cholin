@@ -116,19 +116,13 @@ public class Interactuable : MonoBehaviour
         }
     }
 
+    // La caja abre el panel de pedidos (PedidosCaja, en este mismo objeto).
     void Entregar()
     {
-        var juego = EstadoJuego.Instance;
-        var tutorial = TutorialController.Instance;
-        if (juego == null || tutorial == null) return;
+        var caja = GetComponent<PedidosCaja>();
+        if (caja != null) { caja.Tocar(); return; }
 
-        if (!juego.HayParaVender)
-        {
-            tutorial.Avisar("No tienes nada para entregar. Cosecha cultivos o recoge huevos.");
-            return;
-        }
-
-        int monedas = juego.VenderTodo(out int cultivos, out int huevos);
-        tutorial.Avisar($"Entregaste {cultivos} cultivo(s) y {huevos} huevo(s): +{monedas} monedas");
+        if (TutorialController.Instance != null)
+            TutorialController.Instance.Avisar("A la caja le falta el componente PedidosCaja.");
     }
 }

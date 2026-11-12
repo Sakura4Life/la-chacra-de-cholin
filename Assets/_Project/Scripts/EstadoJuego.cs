@@ -58,15 +58,6 @@ public class EstadoJuego : MonoBehaviour
     public bool BonusActivo => ProductoBonus != Producto.Ninguno;
     public float SegundosRestantesBonus => BonusActivo ? Mathf.Max(0f, finBonus - Time.time) : 0f;
 
-    public bool HayParaVender
-    {
-        get
-        {
-            if (Huevos > 0) return true;
-            foreach (int n in cosecha) if (n > 0) return true;
-            return false;
-        }
-    }
 
     float finBonus;
     readonly int[] semillasCultivo = new int[NumCultivos];
@@ -182,6 +173,28 @@ public class EstadoJuego : MonoBehaviour
             CultivoSeleccionado = c;
             return;
         }
+    }
+
+    // Movimientos del pedido de la caja: pasan productos del inventario a la caja y de vuelta.
+    // Devolver no cuenta como cosecha nueva.
+    public void DevolverCosecha(Cultivo c, int cantidad) { cosecha[(int)c] += cantidad; OnCambio?.Invoke(); }
+
+    public bool GastarHuevo()
+    {
+        if (Huevos <= 0) return false;
+        Huevos--;
+        OnCambio?.Invoke();
+        return true;
+    }
+
+    public void DevolverHuevo(int cantidad) { Huevos += cantidad; OnCambio?.Invoke(); }
+
+    // Paga un pedido entregado y cuenta los cultivos entregados (los usa la misión del tutorial).
+    public void CobrarPedido(int monedas, int cultivos)
+    {
+        Monedas += monedas;
+        CultivosEntregados += cultivos;
+        OnCambio?.Invoke();
     }
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
@@ -300,19 +313,27 @@ public class EstadoJuego : MonoBehaviour
     // Vende todo lo que tengas de ese producto (con el bonificador si corresponde).
     public int VenderProducto(Producto p, out int cantidad)
     {
-        cantidad = Cantidad(p);
-        if (cantidad <= 0) return 0;
+        return VenderCantidad(p, Cantidad(p), out cantidad);
+    }
 
-        int total = cantidad * PrecioBase(p) * Multiplicador(p);
+    // Vende hasta 'cantidad' unidades de un producto (con el bonificador si corresponde).
+    // El pollo se vende de a uno. Devuelve las monedas ganadas y, en 'vendidas', cuántas unidades salieron.
+    public int VenderCantidad(Producto p, int cantidad, out int vendidas)
+    {
+        vendidas = Mathf.Clamp(cantidad, 0, Cantidad(p));
+        if (p == Producto.Pollo) vendidas = Mathf.Min(vendidas, 1);
+        if (vendidas <= 0) return 0;
 
-        if (CultivoDatos.EsCultivo(p, out Cultivo c)) cosecha[(int)c] = 0;
+        int total = vendidas * PrecioBase(p) * Multiplicador(p);
+
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) cosecha[(int)c] -= vendidas;
         else
         {
             switch (p)
             {
-                case Producto.Huevo: Huevos = 0; break;
+                case Producto.Huevo: Huevos -= vendidas; break;
                 case Producto.Pollo: TienePollo = false; PolloVendido = true; break;
-                case Producto.SemillaLegendaria: SemillasLegendarias = 0; break;
+                case Producto.SemillaLegendaria: SemillasLegendarias -= vendidas; break;
             }
         }
 
@@ -321,30 +342,17 @@ public class EstadoJuego : MonoBehaviour
         return total;
     }
 
-    // Venta provisional de la caja de entrega: todos los cultivos y los huevos
-    // (se reemplaza por el panel de pedidos en la 12b-3).
-    public int VenderTodo(out int cultivos, out int huevos)
+    // Compra semillas de un cultivo con monedas. Devuelve false si no alcanzan las monedas.
+    public bool ComprarSemillas(Cultivo c, int cantidad, out int costo)
     {
-        cultivos = 0;
-        int total = 0;
-        foreach (var c in CultivoDatos.Todos)
-        {
-            int n = cosecha[(int)c];
-            if (n <= 0) continue;
-            var p = CultivoDatos.ProductoDe(c);
-            total += n * CultivoDatos.PrecioVenta(c) * Multiplicador(p);
-            cultivos += n;
-            cosecha[(int)c] = 0;
-        }
+        costo = 0;
+        if (cantidad <= 0) return false;
+        costo = cantidad * CultivoDatos.PrecioSemilla(c);
+        if (Monedas < costo) return false;
 
-        huevos = Huevos;
-        total += huevos * precioHuevo * Multiplicador(Producto.Huevo);
-        Huevos = 0;
-
-        Monedas += total;
-        CultivosEntregados += cultivos;
-        OnCambio?.Invoke();
-        return total;
+        Monedas -= costo;
+        SumarSemillas(c, cantidad);   // desbloquea el cultivo y avisa del cambio
+        return true;
     }
 
     // Gasta 1 semilla legendaria y duplica las ganancias de un producto durante un tiempo.

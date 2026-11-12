@@ -3201,6 +3201,64 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 745727727}
   m_CullTransparentMesh: 1
+--- !u!1 &753680257
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 753680258}
+  - component: {fileID: 753680259}
+  m_Layer: 5
+  m_Name: PanelPedidos
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &753680258
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 753680257}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1064532114}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 100, y: 100}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &753680259
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 753680257}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0365996a92b16ef48832f5a040cdbf39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PedidosUI
+  margenLateral: 40
+  margenSuperior: 260
+  margenInferior: 330
+  colorVelo: {r: 0, g: 0, b: 0, a: 0.6}
+  colorPanel: {r: 0.2, g: 0.12, b: 0.07, a: 0.97}
+  colorFila: {r: 0.3, g: 0.19, b: 0.11, a: 1}
+  colorBoton: {r: 0.96, g: 0.92, b: 0.84, a: 1}
+  colorTextoBoton: {r: 0.12, g: 0.08, b: 0.04, a: 1}
+  colorTexto: {r: 1, g: 1, b: 1, a: 1}
+  colorCompleta: {r: 0.55, g: 0.9, b: 0.45, a: 1}
 --- !u!1 &794310442
 GameObject:
   m_ObjectHideFlags: 0
@@ -4558,6 +4616,7 @@ RectTransform:
   - {fileID: 1451705106}
   - {fileID: 1702123243}
   - {fileID: 1622055088}
+  - {fileID: 753680258}
   m_Father: {fileID: 1420355613}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
@@ -6309,6 +6368,16 @@ MonoBehaviour:
   botonTienda: {fileID: 2069655154}
   panel: {fileID: 1611970059}
   botonCerrar: {fileID: 616320232}
+  textoMensaje: {fileID: 1211261250}
+  margenSuperior: 130
+  margenInferior: 260
+  margenLateral: 30
+  colorFila: {r: 0.16, g: 0.1, b: 0.06, a: 0.92}
+  colorBoton: {r: 0.96, g: 0.92, b: 0.84, a: 1}
+  colorTextoBoton: {r: 0.12, g: 0.08, b: 0.04, a: 1}
+  colorTexto: {r: 1, g: 1, b: 1, a: 1}
+  colorPestana: {r: 0.35, g: 0.22, b: 0.12, a: 1}
+  colorPestanaElegida: {r: 0.96, g: 0.76, b: 0.2, a: 1}
   filaTomates: {fileID: 554966536}
   filaHuevos: {fileID: 639953823}
   filaSemilla: {fileID: 1627906840}
@@ -6317,7 +6386,6 @@ MonoBehaviour:
   botonBonusTomate: {fileID: 100481956}
   botonBonusHuevo: {fileID: 1141479936}
   botonBonusPollo: {fileID: 73742607}
-  textoMensaje: {fileID: 1211261250}
 --- !u!4 &1495252012
 Transform:
   m_ObjectHideFlags: 0

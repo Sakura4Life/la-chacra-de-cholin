@@ -12,6 +12,7 @@ public class DatosGuardado
     public int entregadosBase;
     public float hora;
     public int dia;
+    public DatosPedido pedido;   // pedido de la caja (null en partidas anteriores a la 12b-3)
 }
 
 public class Guardado : MonoBehaviour
@@ -27,6 +28,7 @@ public class Guardado : MonoBehaviour
     void Awake()
     {
         PausaJuego.Limpiar();
+        PedidosCaja.Limpiar();
         bloqueado = false;
     }
 
@@ -66,7 +68,8 @@ public class Guardado : MonoBehaviour
             mision = mision.PasoActual,
             entregadosBase = mision.EntregadosBase,
             hora = hora != null ? hora.Progreso : 0f,
-            dia = hora != null ? hora.Dia : 1
+            dia = hora != null ? hora.Dia : 1,
+            pedido = PedidosCaja.Exportar()
         };
 
         PlayerPrefs.SetString(Clave, JsonUtility.ToJson(datos));
@@ -124,6 +127,7 @@ public class Guardado : MonoBehaviour
         if (TutorialController.Instance != null) TutorialController.Instance.Restaurar(datos.tutorial);
         if (MisionController.Instance != null) MisionController.Instance.Restaurar(datos.mision, datos.entregadosBase);
         if (HoraVirtual.Instance != null) HoraVirtual.Instance.Restaurar(datos.hora, datos.dia);
+        PedidosCaja.Preparar(datos.pedido);
 
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("Partida cargada. Escanea el piso para colocar tu granja.", 4f);

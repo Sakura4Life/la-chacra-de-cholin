@@ -47,6 +47,10 @@ public class MisionController : MonoBehaviour
     int entregadosBase;
 
     public bool BuscandoSemillas => paso == Paso.BuscarSemillas;
+    // La caja de pedidos se abre cuando la misión ya pidió el primer pedido.
+    public bool PedidosAbiertos => paso >= Paso.EntregandoPedido;
+    public bool PedidoTutorialActivo => paso == Paso.EntregandoPedido;
+    public int ChoclosPedido => choclosPedido;
     public bool PollitoBuscandose => paso == Paso.PollitoActiva;
     public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
     public bool PollitoEnGallinero => paso >= Paso.PollitoEnGallinero;
@@ -262,7 +266,9 @@ public class MisionController : MonoBehaviour
 
     string TextoProgreso(int entregados)
     {
-        return $"Pedido: entrega {choclosPedido} choclos en la caja ({entregados}/{choclosPedido})";
+        return entregados > 0
+            ? $"Pedido entregado: {entregados}/{choclosPedido} choclos."
+            : $"Pedido: toca la caja que brilla, llénala con {choclosPedido} choclos y entrégalos.";
     }
 
     static void FijarPista(string texto)
