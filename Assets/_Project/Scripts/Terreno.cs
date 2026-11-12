@@ -1,4 +1,16 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+
+// Estado de una parcela para la partida guardada.
+[Serializable]
+public class DatosTerreno
+{
+    public int id;
+    public long ticks;     // hora real del guardado (para calcular cuánto creció mientras estaba cerrado)
+    public DatosHueco[] huecos = new DatosHueco[0];
+}
 
 // Una parcela: agrupa sus huecos de cultivo.
 // - Sembrar y regar: el jugador toca la tierra y la acción va al hueco más cercano al toque
@@ -14,11 +26,85 @@ public class Terreno : MonoBehaviour
     [Tooltip("Separación entre filas, en unidades de granja.")]
     [SerializeField] float separacionZ = 0.12f;
 
+    [Header("Guardado")]
+    [Tooltip("Número único de esta parcela (la primera es 0). Las parcelas compradas usarán 1, 2 y 3.")]
+    [SerializeField] int idTerreno;
+
     Parcela[] huecos;
+
+    // Parcelas vivas y datos cargados esperando a que su parcela exista (la granja se coloca después de cargar).
+    static readonly List<Terreno> activos = new List<Terreno>();
+    static readonly Dictionary<int, DatosTerreno> pendientes = new Dictionary<int, DatosTerreno>();
 
     void Awake()
     {
         huecos = GetComponentsInChildren<Parcela>(true);
+        activos.Add(this);
+    }
+
+    // Espera un fotograma para que los huecos ya hayan hecho su Start (saber si hay llave).
+    IEnumerator Start()
+    {
+        yield return null;
+        if (pendientes.TryGetValue(idTerreno, out DatosTerreno datos))
+        {
+            pendientes.Remove(idTerreno);
+            Aplicar(datos);
+        }
+    }
+
+    void OnDestroy() { activos.Remove(this); }
+
+    // ---------- Guardado ----------
+
+    public static void Limpiar()
+    {
+        pendientes.Clear();
+        activos.Clear();
+    }
+
+    // La llama Guardado al cargar.
+    public static void Preparar(DatosTerreno[] datos)
+    {
+        pendientes.Clear();
+        if (datos == null) return;
+        foreach (var d in datos)
+        {
+            if (d == null) continue;
+            var terreno = activos.Find(t => t.idTerreno == d.id);
+            if (terreno != null) terreno.Aplicar(d);
+            else pendientes[d.id] = d;
+        }
+    }
+
+    public static DatosTerreno[] ExportarTodos()
+    {
+        var lista = new List<DatosTerreno>();
+        var vistos = new HashSet<int>();
+        foreach (var t in activos)
+        {
+            if (t == null) continue;
+            lista.Add(t.Crear());
+            vistos.Add(t.idTerreno);
+        }
+        // Los que aún no tienen parcela en escena se guardan tal cual, con su hora original.
+        foreach (var par in pendientes)
+            if (!vistos.Contains(par.Key)) lista.Add(par.Value);
+        return lista.ToArray();
+    }
+
+    DatosTerreno Crear()
+    {
+        var d = new DatosTerreno { id = idTerreno, ticks = RelojReal.TicksAhora, huecos = new DatosHueco[huecos.Length] };
+        for (int i = 0; i < huecos.Length; i++) d.huecos[i] = huecos[i] != null ? huecos[i].Exportar() : null;
+        return d;
+    }
+
+    void Aplicar(DatosTerreno d)
+    {
+        float fuera = RelojReal.Transcurrido(d.ticks);
+        for (int i = 0; i < huecos.Length && i < d.huecos.Length; i++)
+            if (huecos[i] != null) huecos[i].Restaurar(d.huecos[i], fuera);
     }
 
     // Lo llama Interactuable cuando el toque cae sobre la tierra (no sobre una planta).

@@ -13,6 +13,9 @@ public class DatosGuardado
     public float hora;
     public int dia;
     public DatosPedido pedido;   // pedido de la caja (null en partidas anteriores a la 12b-3)
+    public DatosTerreno[] terrenos;   // huecos de cultivo (null en partidas anteriores a la 12c)
+    public DatosGallina gallina;      // gallina y huevos (valido = false en partidas anteriores a la 12c)
+    public bool enPausa;              // se guardó con el menú de pausa abierto
 }
 
 public class Guardado : MonoBehaviour
@@ -21,6 +24,8 @@ public class Guardado : MonoBehaviour
     static bool bloqueado;
 
     [SerializeField] float segundosAutoguardado = 20f;
+    [Tooltip("Máximo de horas que avanzan los cultivos y la gallina mientras el juego está cerrado.")]
+    [SerializeField] float maxHorasFuera = 24f;
 
     float proximo;
     bool listo;
@@ -29,6 +34,9 @@ public class Guardado : MonoBehaviour
     {
         PausaJuego.Limpiar();
         PedidosCaja.Limpiar();
+        Terreno.Limpiar();
+        Gallina.Limpiar();
+        RelojReal.TopeSegundos = Mathf.Max(0f, maxHorasFuera) * 3600f;
         bloqueado = false;
     }
 
@@ -69,7 +77,10 @@ public class Guardado : MonoBehaviour
             entregadosBase = mision.EntregadosBase,
             hora = hora != null ? hora.Progreso : 0f,
             dia = hora != null ? hora.Dia : 1,
-            pedido = PedidosCaja.Exportar()
+            pedido = PedidosCaja.Exportar(),
+            terrenos = Terreno.ExportarTodos(),
+            gallina = Gallina.Exportar(),
+            enPausa = PausaJuego.MenuAbierto || PausaJuego.PendienteReabrir
         };
 
         PlayerPrefs.SetString(Clave, JsonUtility.ToJson(datos));
@@ -127,7 +138,15 @@ public class Guardado : MonoBehaviour
         if (TutorialController.Instance != null) TutorialController.Instance.Restaurar(datos.tutorial);
         if (MisionController.Instance != null) MisionController.Instance.Restaurar(datos.mision, datos.entregadosBase);
         if (HoraVirtual.Instance != null) HoraVirtual.Instance.Restaurar(datos.hora, datos.dia);
+        if (datos.enPausa)
+        {
+            // Salió con el menú de pausa abierto: ese tiempo no cuenta y el menú vuelve al colocar la granja.
+            RelojReal.IgnorarFuera = true;
+            PausaJuego.PendienteReabrir = true;
+        }
         PedidosCaja.Preparar(datos.pedido);
+        Terreno.Preparar(datos.terrenos);
+        Gallina.Preparar(datos.gallina);
 
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("Partida cargada. Escanea el piso para colocar tu granja.", 4f);

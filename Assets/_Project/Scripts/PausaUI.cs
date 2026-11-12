@@ -15,7 +15,7 @@ public class PausaUI : MonoBehaviour
     [SerializeField] TMP_Text textoNuevaPartida;
     [SerializeField] float escalaMesa = 0.3f;
 
-    const string Motivo = "menu";
+    const string Motivo = PausaJuego.MotivoMenu;
 
     bool confirmandoBorrado;
     float venceConfirmacion;
@@ -33,6 +33,12 @@ public class PausaUI : MonoBehaviour
 
     void Update()
     {
+        if (PausaJuego.PendienteReabrir && ControladorGranja.GranjaColocada && !panel.activeSelf)
+        {
+            PausaJuego.PendienteReabrir = false;
+            Abrir();
+        }
+
         if (panel.activeSelf && confirmandoBorrado && Time.unscaledTime > venceConfirmacion)
         {
             confirmandoBorrado = false;

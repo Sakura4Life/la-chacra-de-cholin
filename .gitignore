@@ -112,3 +112,7 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# Herramienta local de Editor (registro de compilacion), no forma parte del juego
+/Assets/_Project/Editor/
+/Assets/_Project/Editor.meta

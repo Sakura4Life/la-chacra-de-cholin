@@ -1,5 +1,15 @@
+using System;
 using System.Collections;
 using UnityEngine;
+
+// Estado de un hueco para la partida guardada.
+[Serializable]
+public class DatosHueco
+{
+    public int estado;       // 0 bloqueado, 1 vacío, 2 sembrado sin regar, 3 creciendo, 4 listo
+    public int cultivo;      // valor del enum Cultivo
+    public float crecido;    // segundos que lleva creciendo (solo si estado == 3)
+}
 
 // Un hueco de cultivo. Varios huecos forman un Terreno.
 // Ciclo: sembrar -> regar -> crece -> cosechar.
@@ -38,6 +48,7 @@ public class Parcela : MonoBehaviour
     float centroYCapsula;
     Cultivo cultivo = Cultivo.Maiz;
     Estado estado = Estado.Bloqueada;
+    double inicioCrecimiento;   // hora real (RelojReal.Ahora) en que se regó
 
     // Los usa el Terreno para elegir dónde sembrar.
     public bool Libre => estado == Estado.Vacia;
@@ -119,6 +130,7 @@ public class Parcela : MonoBehaviour
                 if (juego != null && juego.GastarAgua())
                 {
                     estado = Estado.Creciendo;
+                    inicioCrecimiento = RelojReal.Ahora;
                     StartCoroutine(Crecer());
                     Avisar("¡Regado! Espera a que crezca.");
                 }
@@ -169,6 +181,58 @@ public class Parcela : MonoBehaviour
         Aplicar(0f);
     }
 
+    // ---------- Guardado ----------
+
+    public DatosHueco Exportar()
+    {
+        return new DatosHueco
+        {
+            estado = (int)estado,
+            cultivo = (int)cultivo,
+            crecido = estado == Estado.Creciendo
+                ? Mathf.Max(0f, (float)(RelojReal.Ahora - inicioCrecimiento))
+                : 0f
+        };
+    }
+
+    // Deja el hueco como estaba al guardar. 'segundosFuera' es el tiempo que pasó desde entonces.
+    public void Restaurar(DatosHueco d, float segundosFuera)
+    {
+        if (d == null || estado == Estado.Bloqueada) return;   // sin llave no hay nada que restaurar
+
+        StopAllCoroutines();
+        DestruirVisual();
+        cultivo = (Cultivo)Mathf.Clamp(d.cultivo, 0, System.Enum.GetValues(typeof(Cultivo)).Length - 1);
+
+        switch ((Estado)Mathf.Clamp(d.estado, 0, 4))
+        {
+            case Estado.Seca:
+                CrearVisual();
+                estado = Estado.Seca;
+                Aplicar(0f);
+                break;
+
+            case Estado.Creciendo:
+                CrearVisual();
+                estado = Estado.Creciendo;
+                inicioCrecimiento = RelojReal.Ahora - (d.crecido + segundosFuera);
+                StartCoroutine(Crecer());   // si ya pasó el tiempo, termina enseguida
+                break;
+
+            case Estado.Lista:
+                CrearVisual();
+                estado = Estado.Lista;
+                Aplicar(1f);
+                if (madura != null) madura.localScale = escalaMadura;
+                break;
+
+            default:
+                estado = Estado.Vacia;
+                Aplicar(0f);
+                break;
+        }
+    }
+
     // ---------- Modelos ----------
 
     void CrearVisual()
@@ -201,12 +265,13 @@ public class Parcela : MonoBehaviour
 
     IEnumerator Crecer()
     {
+        // Se mide con la hora real: sigue avanzando con el juego en segundo plano o cerrado.
         float duracion = Mathf.Max(0.1f, CultivoDatos.SegundosCrecimiento(cultivo) * multiplicadorTiempo);
-        float t = 0f;
-        while (t < 1f)
+        while (true)
         {
-            t += Time.deltaTime / duracion;
-            Aplicar(Mathf.Clamp01(t));
+            float t = Mathf.Clamp01((float)((RelojReal.Ahora - inicioCrecimiento) / duracion));
+            Aplicar(t);
+            if (t >= 1f) break;
             yield return null;
         }
         estado = Estado.Lista;

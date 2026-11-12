@@ -2,6 +2,17 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Estado de la gallina para la partida guardada.
+[System.Serializable]
+public class DatosGallina
+{
+    public bool valido;      // false = no hay nada que restaurar
+    public bool comiendo;
+    public float comido;     // segundos que lleva comiendo
+    public int pendientes;   // huevos esperando en el gallinero
+    public long ticks;       // hora real del guardado
+}
+
 public class Gallina : MonoBehaviour
 {
     enum Estado { Hambrienta, Comiendo }
@@ -59,12 +70,17 @@ public class Gallina : MonoBehaviour
     int ultimoPuesto = -1;
     int pendientes;
     readonly List<GameObject> huevos = new List<GameObject>();
+    double inicioComer;   // hora real (RelojReal.Ahora) en que empezó a comer
+
+    static Gallina activa;
+    static DatosGallina pendiente;   // datos cargados, a la espera de que la gallina se coloque en el gallinero
 
     // Lo usan el huevo y el gallinero para saber si aceptan el toque.
     public bool HuevoListo => enabled && !ocupada && pendientes > 0;
 
     void Awake()
     {
+        activa = this;
         escalaPollito = modeloPollito.transform.localScale;
         escalaHuevo = huevo.transform.localScale;
         huevos.Add(huevo);
@@ -77,6 +93,53 @@ public class Gallina : MonoBehaviour
     void OnEnable()
     {
         StartCoroutine(Vivir());
+    }
+
+    void OnDestroy()
+    {
+        if (activa == this) activa = null;
+    }
+
+    // ---------- Guardado ----------
+
+    public static void Limpiar() { pendiente = null; }
+
+    public static void Preparar(DatosGallina datos)
+    {
+        pendiente = datos != null && datos.valido ? datos : null;
+    }
+
+    public static DatosGallina Exportar()
+    {
+        if (activa != null && activa.enabled) return activa.Crear();
+        return pendiente ?? new DatosGallina();
+    }
+
+    DatosGallina Crear()
+    {
+        bool comiendoAhora = estado == Estado.Comiendo;
+        return new DatosGallina
+        {
+            valido = true,
+            comiendo = comiendoAhora,
+            comido = comiendoAhora ? Mathf.Max(0f, (float)(RelojReal.Ahora - inicioComer)) : 0f,
+            pendientes = pendientes,
+            ticks = RelojReal.TicksAhora
+        };
+    }
+
+    void AplicarDatos(DatosGallina d)
+    {
+        float fuera = RelojReal.Transcurrido(d.ticks);
+
+        for (int i = 0; i < d.pendientes && pendientes < maxHuevosAcumulados; i++)
+        {
+            pendientes++;
+            AgregarHuevo();
+        }
+
+        // Si estaba comiendo, retoma desde donde iba; si el tiempo ya pasó, termina enseguida y pone el huevo.
+        if (d.comiendo) StartCoroutine(Comer(d.comido + fuera));
     }
 
     // ---------- Toque ----------
@@ -215,18 +278,21 @@ public class Gallina : MonoBehaviour
 
     // ---------- Comer, crecer y subir la rampa ----------
 
-    IEnumerator Comer()
+    // 'yaComido' > 0 al restaurar una partida. Se mide con la hora real (sigue con el juego en segundo plano).
+    IEnumerator Comer(float yaComido = 0f)
     {
         estado = Estado.Comiendo;
+        inicioComer = RelojReal.Ahora - yaComido;
         Poner(AnimacionAve.Anim.Picotear);
 
         var tr = modeloPollito.transform;
-        float t = 0f;
-        while (t < segundosParaHuevo)
+        while (true)
         {
-            t += Time.deltaTime;
+            float t = (float)(RelojReal.Ahora - inicioComer);
             if (!adulto)
-                tr.localScale = Vector3.Lerp(escalaPollito, escalaPollito * crecimientoPollito, t / segundosParaHuevo);
+                tr.localScale = Vector3.Lerp(escalaPollito, escalaPollito * crecimientoPollito,
+                                             Mathf.Clamp01(t / segundosParaHuevo));
+            if (t >= segundosParaHuevo) break;
             yield return null;
         }
 
@@ -289,12 +355,21 @@ public class Gallina : MonoBehaviour
         {
             transform.localPosition = Local(puntoGallinero);
         }
+
+        // Huevos pendientes y comida en curso de la partida guardada.
+        if (pendiente != null)
+        {
+            var datos = pendiente;
+            pendiente = null;
+            AplicarDatos(datos);
+        }
     }
 
     // Se llama cuando el animal se vende: detiene todo y oculta el huevo.
     public void Retirar()
     {
         StopAllCoroutines();
+        pendiente = null;
         ocupada = false;
         pendientes = 0;
         OcultarHuevos();
