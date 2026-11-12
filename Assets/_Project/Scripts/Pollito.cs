@@ -5,8 +5,10 @@ using UnityEngine.InputSystem;
 public class Pollito : MonoBehaviour
 {
     [Header("Cuerpo")]
-    [SerializeField] Renderer cuerpo;
+    [Tooltip("El vacío 'Visual', padre de los modelos del pollito y la gallina.")]
+    [SerializeField] GameObject visual;
     [SerializeField] Collider colision;
+    [SerializeField] AnimacionAve animacion;
 
     [Header("Sonido (frío-caliente)")]
     [Tooltip("Si lo dejas vacío se genera un pío sintético.")]
@@ -25,16 +27,19 @@ public class Pollito : MonoBehaviour
     [SerializeField] Transform puntoGallinero;
     [SerializeField] Resaltado resaltadoGallinero;
     [SerializeField] float radioSoltar = 0.2f;
-    [SerializeField] float alturaArrastre = 0.09f;
-    [SerializeField] float alturaSuelo = 0.03f;
+    [SerializeField] float alturaArrastre = 0.07f;
+    [SerializeField] float alturaSuelo = 0f;
     [SerializeField] float limite = 0.45f;
 
-    static readonly int IdColor = Shader.PropertyToID("_BaseColor");
+    [Header("Pruebas en el editor")]
+    [Tooltip("Solo para probar en Play sin hacer toda la misión. Desmárcalo al terminar.")]
+    [SerializeField] bool modoPrueba;
 
     AudioSource fuente;
     Transform camara;
     Gallina gallina;
     float proximoPiar;
+    float proximoSalto;
     bool arrastrando;
     bool gallineroBrilla;
     bool retirado;
@@ -53,11 +58,7 @@ public class Pollito : MonoBehaviour
 
         if (clipPiar == null) clipPiar = CrearPioSintetico();
 
-        var bloque = new MaterialPropertyBlock();
-        bloque.SetColor(IdColor, new Color(1f, 0.9f, 0.2f));
-        cuerpo.SetPropertyBlock(bloque);
-
-        cuerpo.enabled = false;
+        visual.SetActive(false);
         colision.enabled = false;
         plumas.SetActive(false);
     }
@@ -68,17 +69,24 @@ public class Pollito : MonoBehaviour
         if (mision == null) return;
 
         var juego = EstadoJuego.Instance;
+
+        if (modoPrueba && !posicionado)
+        {
+            posicionado = true;
+            transform.localPosition = puntoGallinero.localPosition;
+            if (gallina != null) gallina.enabled = true;
+        }
+
         if (!retirado && juego != null && juego.PolloVendido)
         {
             retirado = true;
             if (gallina != null) gallina.Retirar();
         }
 
-        bool visible = mision.PollitoVisible && !retirado;
-
-        if (visible != cuerpo.enabled)
+        bool visible = modoPrueba || (mision.PollitoVisible && !retirado);
+        if (visible != visual.activeSelf)
         {
-            cuerpo.enabled = visible;
+            visual.SetActive(visible);
             colision.enabled = visible;
         }
 
@@ -86,12 +94,12 @@ public class Pollito : MonoBehaviour
         if (!posicionado && mision.PollitoEnGallinero && juego != null && juego.TienePollo)
         {
             posicionado = true;
-            transform.localPosition = puntoGallinero.localPosition;
             if (gallina != null)
             {
+                gallina.Restaurar(juego.PolloAdulto);
                 gallina.enabled = true;
-                if (juego.PolloAdulto) gallina.RestaurarAdulto();
             }
+            else transform.localPosition = puntoGallinero.localPosition;
         }
 
         bool encontrado = mision.PollitoYaEncontrado;
@@ -103,6 +111,17 @@ public class Pollito : MonoBehaviour
 
         if (encontrado) ManejarArrastre();
         else arrastrando = false;
+
+        // Mientras espera escondido o se arrastra, esta clase decide su animación.
+        if (visible && !posicionado)
+        {
+            Poner(arrastrando ? AnimacionAve.Anim.Colgado : AnimacionAve.Anim.Reposo);
+            if (!arrastrando && Time.time >= proximoSalto)
+            {
+                if (animacion != null) animacion.Saltar();
+                proximoSalto = Time.time + Random.Range(3f, 6f);
+            }
+        }
 
         if (!mision.PollitoBuscandose || !ControladorGranja.GranjaColocada)
         {
@@ -126,8 +145,14 @@ public class Pollito : MonoBehaviour
         {
             fuente.pitch = Mathf.Lerp(1f, 1.35f, cercania);
             fuente.PlayOneShot(clipPiar, Mathf.Lerp(0.35f, 1f, cercania));
+            if (animacion != null) animacion.Pulso();
             proximoPiar = Time.time + Mathf.Lerp(intervaloLejos, intervaloCerca, cercania);
         }
+    }
+
+    void Poner(AnimacionAve.Anim a)
+    {
+        if (animacion != null) animacion.Poner(a);
     }
 
     // Toque rápido sobre el pollito (lo llama Interactuable).
@@ -140,7 +165,7 @@ public class Pollito : MonoBehaviour
             mision.AlEncontrarPollito();
         else if (mision.PollitoYaEncontrado)
             Avisar("Arrastra al pollito con el dedo hasta el gallinero, el que brilla.");
-        else if (mision.PollitoEnGallinero && gallina != null)
+        else if ((mision.PollitoEnGallinero || modoPrueba) && gallina != null)
             gallina.Tocar();
     }
 
@@ -158,8 +183,10 @@ public class Pollito : MonoBehaviour
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(id)) return;
 
             Ray rayo = Camera.main.ScreenPointToRay(toque.position.ReadValue());
-            if (Physics.Raycast(rayo, out RaycastHit golpe, 10f) && golpe.collider == colision)
-                arrastrando = true;
+            foreach (var golpe in Physics.RaycastAll(rayo, 10f))
+            {
+                if (golpe.collider == colision) { arrastrando = true; break; }
+            }
         }
 
         if (!arrastrando) return;
@@ -207,6 +234,7 @@ public class Pollito : MonoBehaviour
         {
             transform.localPosition = destino;
             posicionado = true;
+            Poner(AnimacionAve.Anim.Reposo);
             if (gallina != null) gallina.enabled = true;
             MisionController.Instance.AlLlegarAlGallinero();
         }

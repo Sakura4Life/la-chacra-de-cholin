@@ -55,10 +55,16 @@ public class InteraccionToque : MonoBehaviour
     void Tocar(Vector2 posicionPantalla)
     {
         Ray rayo = camara.ScreenPointToRay(posicionPantalla);
-        if (Physics.Raycast(rayo, out RaycastHit golpe, distanciaMaxima))
+        RaycastHit[] golpes = Physics.RaycastAll(rayo, distanciaMaxima);
+        System.Array.Sort(golpes, (a, b) => a.distance.CompareTo(b.distance));
+
+        foreach (var golpe in golpes)
         {
             var objeto = golpe.collider.GetComponentInParent<Interactuable>();
-            if (objeto != null) objeto.Tocar();
+            if (objeto == null) break;            // algo sólido tapa lo de atrás
+            if (!objeto.AceptaToque) continue;    // gallinero sin huevo: deja pasar el toque
+            objeto.Tocar(golpe.point);
+            return;
         }
     }
 }

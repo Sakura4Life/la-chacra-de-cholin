@@ -5,12 +5,14 @@ using UnityEngine;
 [Serializable]
 public class DatosGuardado
 {
+    public int version;          // 0 = partida anterior a las semillas
     public DatosEstado estado;
     public int tutorial;
     public int mision;
     public int entregadosBase;
     public float hora;
     public int dia;
+    public DatosPedido pedido;   // pedido de la caja (null en partidas anteriores a la 12b-3)
 }
 
 public class Guardado : MonoBehaviour
@@ -26,6 +28,7 @@ public class Guardado : MonoBehaviour
     void Awake()
     {
         PausaJuego.Limpiar();
+        PedidosCaja.Limpiar();
         bloqueado = false;
     }
 
@@ -59,12 +62,14 @@ public class Guardado : MonoBehaviour
 
         var datos = new DatosGuardado
         {
+            version = 3,
             estado = juego.Exportar(),
             tutorial = tutorial.PasoActual,
             mision = mision.PasoActual,
             entregadosBase = mision.EntregadosBase,
             hora = hora != null ? hora.Progreso : 0f,
-            dia = hora != null ? hora.Dia : 1
+            dia = hora != null ? hora.Dia : 1,
+            pedido = PedidosCaja.Exportar()
         };
 
         PlayerPrefs.SetString(Clave, JsonUtility.ToJson(datos));
@@ -78,17 +83,51 @@ public class Guardado : MonoBehaviour
         PlayerPrefs.Save();
     }
 
+    // Adapta partidas antiguas al formato actual.
+    static void Migrar(DatosGuardado d)
+    {
+        if (d.version < 2)
+        {
+            // Se insertó el paso "BuscarSemillas" después de "Inactiva" en la misión.
+            if (d.mision >= 1) d.mision++;
+
+            // Quien ya tenía la llave jugaba con tomates ilimitados: se le dan semillas para seguir.
+            if (d.estado != null && d.estado.semillasCultivo == null)
+            {
+                d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+                if (d.estado.llave) d.estado.semillasCultivo[(int)Cultivo.Tomate] = 10;
+            }
+            d.version = 2;
+        }
+
+        if (d.version < 3)
+        {
+            // Fase 12b: el cultivo inicial pasó a ser el choclo y la gallina solo come choclo.
+            // Quien ya tenía la llave recibe 12 semillas de choclo (las mismas que da Cholin).
+            // Las cosechas por cultivo y los cultivos desbloqueados los calcula EstadoJuego.Importar.
+            if (d.estado != null && d.estado.llave)
+            {
+                if (d.estado.semillasCultivo == null || d.estado.semillasCultivo.Length < System.Enum.GetValues(typeof(Cultivo)).Length)
+                    d.estado.semillasCultivo = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
+                d.estado.semillasCultivo[(int)Cultivo.Maiz] += 12;
+            }
+            d.version = 3;
+        }
+    }
+
     void Cargar()
     {
         if (!PlayerPrefs.HasKey(Clave)) return;
 
         var datos = JsonUtility.FromJson<DatosGuardado>(PlayerPrefs.GetString(Clave));
         if (datos == null) return;
+        Migrar(datos);
 
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.Importar(datos.estado);
         if (TutorialController.Instance != null) TutorialController.Instance.Restaurar(datos.tutorial);
         if (MisionController.Instance != null) MisionController.Instance.Restaurar(datos.mision, datos.entregadosBase);
         if (HoraVirtual.Instance != null) HoraVirtual.Instance.Restaurar(datos.hora, datos.dia);
+        PedidosCaja.Preparar(datos.pedido);
 
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("Partida cargada. Escanea el piso para colocar tu granja.", 4f);

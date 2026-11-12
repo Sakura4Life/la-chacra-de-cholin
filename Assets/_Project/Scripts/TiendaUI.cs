@@ -1,50 +1,92 @@
+using System.Collections.Generic;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
+// Tienda con 3 pestañas: Vender, Comprar semillas y Bonus. Todo el contenido se crea por código
+// dentro del panel que ya tienes; los elementos antiguos de la tienda se ocultan solos.
 public class TiendaUI : MonoBehaviour
 {
+    enum Pestana { Vender, Semillas, Bonus }
+
     [Header("Abrir y cerrar")]
     [SerializeField] Button botonTienda;
     [SerializeField] GameObject panel;
     [SerializeField] Button botonCerrar;
 
-    [Header("Filas de venta")]
+    [Header("Mensajes")]
+    [SerializeField] TMP_Text textoMensaje;
+
+    [Header("Zona del contenido dentro del panel (unidades del Canvas)")]
+    [Tooltip("Espacio libre arriba (para el título 'Tienda').")]
+    [SerializeField] float margenSuperior = 130f;
+    [Tooltip("Espacio libre abajo (para el mensaje y el botón Cerrar).")]
+    [SerializeField] float margenInferior = 260f;
+    [SerializeField] float margenLateral = 30f;
+
+    [Header("Aspecto")]
+    [SerializeField] Color colorFila = new Color(0.16f, 0.10f, 0.06f, 0.92f);
+    [SerializeField] Color colorBoton = new Color(0.96f, 0.92f, 0.84f, 1f);
+    [SerializeField] Color colorTextoBoton = new Color(0.12f, 0.08f, 0.04f, 1f);
+    [SerializeField] Color colorTexto = Color.white;
+    [SerializeField] Color colorPestana = new Color(0.35f, 0.22f, 0.12f, 1f);
+    [SerializeField] Color colorPestanaElegida = new Color(0.96f, 0.76f, 0.20f, 1f);
+
+    [Header("Elementos antiguos (se ocultan solos; puedes borrarlos del panel)")]
     [SerializeField] FilaVenta filaTomates;
     [SerializeField] FilaVenta filaHuevos;
     [SerializeField] FilaVenta filaSemilla;
     [SerializeField] FilaVenta filaPollo;
-
-    [Header("Bonificador x2")]
     [SerializeField] TMP_Text textoBonus;
     [SerializeField] Button botonBonusTomate;
     [SerializeField] Button botonBonusHuevo;
     [SerializeField] Button botonBonusPollo;
 
-    [Header("Mensajes")]
-    [SerializeField] TMP_Text textoMensaje;
+    class Fila
+    {
+        public Producto producto;
+        public Cultivo cultivo;
+        public bool compra;     // true = compra de semillas
+        public bool unica;      // true = se vende de a una unidad (pollo, semilla legendaria)
+        public TMP_Text etiqueta, cantidad, accion;
+        public Button menos, mas, max, boton;
+    }
+
+    class FilaBonus
+    {
+        public Producto producto;
+        public Button boton;
+    }
+
+    RectTransform contenido;
+    ScrollRect scroll;
+    TMP_Text estadoBonus;
+    readonly List<Image> fondosPestana = new List<Image>();
+    readonly List<TMP_Text> textosPestana = new List<TMP_Text>();
+    readonly List<Fila> filas = new List<Fila>();
+    readonly List<FilaBonus> filasBonus = new List<FilaBonus>();
+
+    Pestana pestana = Pestana.Vender;
+    string firma = "";
+    readonly int[] cantVenta = new int[System.Enum.GetValues(typeof(Producto)).Length];
+    readonly int[] cantCompra = new int[System.Enum.GetValues(typeof(Cultivo)).Length];
 
     Producto pendiente = Producto.Ninguno;
     float vencePendiente;
     float proximoRefresco;
 
+    // ---------- Inicio ----------
+
     void Start()
     {
+        OcultarAntiguos();
+        ConstruirContenido();
+
         panel.SetActive(false);
         botonTienda.gameObject.SetActive(false);
-
         botonTienda.onClick.AddListener(Abrir);
         botonCerrar.onClick.AddListener(Cerrar);
-
-        filaTomates.boton.onClick.AddListener(() => Vender(Producto.Tomate));
-        filaHuevos.boton.onClick.AddListener(() => Vender(Producto.Huevo));
-        filaSemilla.boton.onClick.AddListener(() => Vender(Producto.SemillaLegendaria));
-        filaPollo.boton.onClick.AddListener(() => Vender(Producto.Pollo));
-
-        botonBonusTomate.onClick.AddListener(() => ActivarBonus(Producto.Tomate));
-        botonBonusHuevo.onClick.AddListener(() => ActivarBonus(Producto.Huevo));
-        botonBonusPollo.onClick.AddListener(() => ActivarBonus(Producto.Pollo));
 
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.OnCambio += Refrescar;
         Refrescar();
@@ -53,6 +95,23 @@ public class TiendaUI : MonoBehaviour
     void OnDestroy()
     {
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.OnCambio -= Refrescar;
+    }
+
+    void OcultarAntiguos()
+    {
+        OcultarFila(filaTomates);
+        OcultarFila(filaHuevos);
+        OcultarFila(filaSemilla);
+        OcultarFila(filaPollo);
+        if (textoBonus != null) textoBonus.gameObject.SetActive(false);
+        if (botonBonusTomate != null) botonBonusTomate.gameObject.SetActive(false);
+        if (botonBonusHuevo != null) botonBonusHuevo.gameObject.SetActive(false);
+        if (botonBonusPollo != null) botonBonusPollo.gameObject.SetActive(false);
+    }
+
+    static void OcultarFila(FilaVenta fila)
+    {
+        if (fila != null) fila.gameObject.SetActive(false);
     }
 
     void Update()
@@ -66,8 +125,10 @@ public class TiendaUI : MonoBehaviour
     {
         textoMensaje.text = "";
         pendiente = Producto.Ninguno;
+        for (int i = 0; i < cantVenta.Length; i++) cantVenta[i] = 1;
+        for (int i = 0; i < cantCompra.Length; i++) cantCompra[i] = 1;
         panel.SetActive(true);
-        Refrescar();
+        ElegirPestana(Pestana.Vender);
     }
 
     void Cerrar()
@@ -76,13 +137,307 @@ public class TiendaUI : MonoBehaviour
         panel.SetActive(false);
     }
 
-    void Vender(Producto p)
+    // ---------- Construcción de la interfaz ----------
+
+    void ConstruirContenido()
+    {
+        var raiz = Hijo("Contenido", panel.transform);
+        raiz.anchorMin = Vector2.zero;
+        raiz.anchorMax = Vector2.one;
+        raiz.offsetMin = new Vector2(margenLateral, margenInferior);
+        raiz.offsetMax = new Vector2(-margenLateral, -margenSuperior);
+
+        // Pestañas
+        var barra = Hijo("Pestanas", raiz);
+        barra.anchorMin = new Vector2(0f, 1f);
+        barra.anchorMax = new Vector2(1f, 1f);
+        barra.pivot = new Vector2(0.5f, 1f);
+        barra.anchoredPosition = Vector2.zero;
+        barra.sizeDelta = new Vector2(0f, 90f);
+        var capaBarra = barra.gameObject.AddComponent<HorizontalLayoutGroup>();
+        capaBarra.spacing = 10f;
+        capaBarra.childControlWidth = true;
+        capaBarra.childControlHeight = true;
+        capaBarra.childForceExpandWidth = true;
+        capaBarra.childForceExpandHeight = true;
+
+        string[] nombres = { "Vender", "Comprar semillas", "Bonus" };
+        for (int i = 0; i < nombres.Length; i++)
+        {
+            var p = (Pestana)i;
+            var b = CrearBoton(barra, "Pestana_" + nombres[i], nombres[i], 0f, 90f, colorPestana, colorTexto,
+                () => ElegirPestana(p), out TMP_Text texto);
+            fondosPestana.Add(b.GetComponent<Image>());
+            textosPestana.Add(texto);
+        }
+
+        // Lista con desplazamiento
+        var lista = Hijo("Lista", raiz);
+        lista.anchorMin = Vector2.zero;
+        lista.anchorMax = Vector2.one;
+        lista.offsetMin = Vector2.zero;
+        lista.offsetMax = new Vector2(0f, -100f);
+        scroll = lista.gameObject.AddComponent<ScrollRect>();
+
+        var vista = Hijo("Vista", lista);
+        Estirar(vista, 0f);
+        vista.gameObject.AddComponent<RectMask2D>();
+        var capturaToque = vista.gameObject.AddComponent<Image>();
+        capturaToque.color = new Color(0f, 0f, 0f, 0.01f);
+
+        contenido = Hijo("Filas", vista);
+        contenido.anchorMin = new Vector2(0f, 1f);
+        contenido.anchorMax = new Vector2(1f, 1f);
+        contenido.pivot = new Vector2(0.5f, 1f);
+        contenido.anchoredPosition = Vector2.zero;
+        contenido.sizeDelta = Vector2.zero;
+        var capa = contenido.gameObject.AddComponent<VerticalLayoutGroup>();
+        capa.spacing = 10f;
+        capa.childControlWidth = true;
+        capa.childControlHeight = true;
+        capa.childForceExpandWidth = true;
+        capa.childForceExpandHeight = false;
+        var ajuste = contenido.gameObject.AddComponent<ContentSizeFitter>();
+        ajuste.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        scroll.viewport = vista;
+        scroll.content = contenido;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 40f;
+    }
+
+    void ElegirPestana(Pestana nueva)
+    {
+        pestana = nueva;
+        pendiente = Producto.Ninguno;
+        firma = "";   // fuerza a reconstruir la lista
+        for (int i = 0; i < fondosPestana.Count; i++)
+        {
+            bool elegida = i == (int)pestana;
+            fondosPestana[i].color = elegida ? colorPestanaElegida : colorPestana;
+            textosPestana[i].color = elegida ? colorTextoBoton : colorTexto;
+        }
+        Refrescar();
+        if (scroll != null) scroll.verticalNormalizedPosition = 1f;
+    }
+
+    static RectTransform Hijo(string nombre, Transform padre)
+    {
+        var go = new GameObject(nombre, typeof(RectTransform));
+        go.transform.SetParent(padre, false);
+        return (RectTransform)go.transform;
+    }
+
+    static void Estirar(RectTransform rt, float margen)
+    {
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(margen, margen);
+        rt.offsetMax = new Vector2(-margen, -margen);
+    }
+
+    TMP_Text CrearTexto(Transform padre, string nombre, float tamano, TextAlignmentOptions alineacion, Color color)
+    {
+        var rt = Hijo(nombre, padre);
+        var t = rt.gameObject.AddComponent<TextMeshProUGUI>();
+        t.fontSize = tamano;
+        t.alignment = alineacion;
+        t.color = color;
+        t.raycastTarget = false;
+        t.enableAutoSizing = true;
+        t.fontSizeMax = tamano;
+        t.fontSizeMin = Mathf.Max(14f, tamano * 0.55f);
+        t.textWrappingMode = TextWrappingModes.Normal;
+        return t;
+    }
+
+    // ancho = 0 -> el botón se reparte el espacio libre de la fila.
+    Button CrearBoton(Transform padre, string nombre, string texto, float ancho, float alto,
+                      Color fondo, Color colorLetra, UnityAction alPulsar, out TMP_Text etiqueta)
+    {
+        var rt = Hijo(nombre, padre);
+        var imagen = rt.gameObject.AddComponent<Image>();
+        imagen.color = fondo;
+        var boton = rt.gameObject.AddComponent<Button>();
+        boton.targetGraphic = imagen;
+
+        var medida = rt.gameObject.AddComponent<LayoutElement>();
+        if (ancho > 0f) medida.preferredWidth = ancho; else medida.flexibleWidth = 1f;
+        medida.preferredHeight = alto;
+
+        etiqueta = CrearTexto(rt, "Texto", 34f, TextAlignmentOptions.Center, colorLetra);
+        Estirar(etiqueta.rectTransform, 6f);
+        etiqueta.text = texto;
+
+        boton.onClick.AddListener(alPulsar);
+        return boton;
+    }
+
+    // Fila de venta o de compra: etiqueta arriba; abajo, [-] n [+] [Máx] y el botón de acción.
+    Fila CrearFila(Producto p, Cultivo c, bool compra, bool unica)
+    {
+        var fila = new Fila { producto = p, cultivo = c, compra = compra, unica = unica };
+
+        var rt = Hijo((compra ? "Compra_" : "Venta_") + (compra ? c.ToString() : p.ToString()), contenido);
+        var fondo = rt.gameObject.AddComponent<Image>();
+        fondo.color = colorFila;
+        var vertical = rt.gameObject.AddComponent<VerticalLayoutGroup>();
+        vertical.padding = new RectOffset(16, 16, 10, 10);
+        vertical.spacing = 8f;
+        vertical.childControlWidth = true;
+        vertical.childControlHeight = true;
+        vertical.childForceExpandWidth = true;
+        vertical.childForceExpandHeight = false;
+
+        fila.etiqueta = CrearTexto(rt, "Etiqueta", 32f, TextAlignmentOptions.MidlineLeft, colorTexto);
+        fila.etiqueta.gameObject.AddComponent<LayoutElement>().preferredHeight = 44f;
+
+        var controles = Hijo("Controles", rt);
+        var horizontal = controles.gameObject.AddComponent<HorizontalLayoutGroup>();
+        horizontal.spacing = 10f;
+        horizontal.childAlignment = TextAnchor.MiddleLeft;
+        horizontal.childControlWidth = true;
+        horizontal.childControlHeight = true;
+        horizontal.childForceExpandWidth = false;
+        horizontal.childForceExpandHeight = false;
+        controles.gameObject.AddComponent<LayoutElement>().preferredHeight = 90f;
+
+        if (!unica)
+        {
+            fila.menos = CrearBoton(controles, "Menos", "-", 90f, 90f, colorBoton, colorTextoBoton,
+                () => Cambiar(fila, -1), out _);
+
+            fila.cantidad = CrearTexto(controles, "Cantidad", 40f, TextAlignmentOptions.Center, colorTexto);
+            fila.cantidad.gameObject.AddComponent<LayoutElement>().preferredWidth = 100f;
+
+            fila.mas = CrearBoton(controles, "Mas", "+", 90f, 90f, colorBoton, colorTextoBoton,
+                () => Cambiar(fila, +1), out _);
+            fila.max = CrearBoton(controles, "Max", "Máx", 120f, 90f, colorBoton, colorTextoBoton,
+                () => PonerMaximo(fila), out _);
+        }
+
+        fila.boton = CrearBoton(controles, "Accion", "", 0f, 90f, colorBoton, colorTextoBoton,
+            () => Pulsar(fila), out fila.accion);
+
+        filas.Add(fila);
+        return fila;
+    }
+
+    void CrearFilaBonus(Producto p)
+    {
+        var fb = new FilaBonus { producto = p };
+        string nombre = TituloProducto(p);
+        fb.boton = CrearBoton(contenido, "Bonus_" + p, "x2 " + nombre, 0f, 100f, colorBoton, colorTextoBoton,
+            () => ActivarBonus(p), out _);
+        filasBonus.Add(fb);
+    }
+
+    // ---------- Qué se muestra en cada pestaña ----------
+
+    static bool Conocido(EstadoJuego j, Cultivo c) { return j.Desbloqueado(c) || j.Cosecha(c) > 0; }
+
+    List<Producto> ProductosVisibles(EstadoJuego j, bool incluirSemilla)
+    {
+        var lista = new List<Producto>();
+        foreach (var c in CultivoDatos.Todos)
+            if (Conocido(j, c)) lista.Add(CultivoDatos.ProductoDe(c));
+        lista.Add(Producto.Huevo);
+        if (j.TienePollo) lista.Add(Producto.Pollo);
+        if (incluirSemilla && j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
+        return lista;
+    }
+
+    string CalcularFirma(EstadoJuego j)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append((int)pestana).Append(':');
+        if (pestana == Pestana.Semillas) return sb.ToString();
+        foreach (var p in ProductosVisibles(j, pestana == Pestana.Vender)) sb.Append((int)p).Append(',');
+        return sb.ToString();
+    }
+
+    void Reconstruir(EstadoJuego j)
+    {
+        for (int i = contenido.childCount - 1; i >= 0; i--)
+        {
+            var hijo = contenido.GetChild(i).gameObject;
+            hijo.SetActive(false);
+            Destroy(hijo);
+        }
+        filas.Clear();
+        filasBonus.Clear();
+        estadoBonus = null;
+
+        switch (pestana)
+        {
+            case Pestana.Vender:
+                foreach (var p in ProductosVisibles(j, true))
+                {
+                    bool unica = p == Producto.Pollo || p == Producto.SemillaLegendaria;
+                    CrearFila(p, Cultivo.Maiz, false, unica);
+                }
+                break;
+
+            case Pestana.Semillas:
+                foreach (var c in CultivoDatos.Todos)
+                    CrearFila(Producto.Ninguno, c, true, false);
+                break;
+
+            case Pestana.Bonus:
+                estadoBonus = CrearTexto(contenido, "Estado", 32f, TextAlignmentOptions.MidlineLeft, colorTexto);
+                estadoBonus.gameObject.AddComponent<LayoutElement>().preferredHeight = 120f;
+                foreach (var p in ProductosVisibles(j, false)) CrearFilaBonus(p);
+                break;
+        }
+    }
+
+    // ---------- Acciones ----------
+
+    int Cantidad(Fila f) { return f.compra ? cantCompra[(int)f.cultivo] : cantVenta[(int)f.producto]; }
+
+    void FijarCantidad(Fila f, int n)
+    {
+        if (f.compra) cantCompra[(int)f.cultivo] = n; else cantVenta[(int)f.producto] = n;
+    }
+
+    // Tope de unidades que se pueden elegir: lo que tienes (venta) o lo que alcanzan tus monedas (compra).
+    static int Tope(EstadoJuego j, Fila f)
+    {
+        if (f.compra) return Mathf.Max(1, j.Monedas / CultivoDatos.PrecioSemilla(f.cultivo));
+        return j.Cantidad(f.producto);
+    }
+
+    void Cambiar(Fila f, int delta)
     {
         var j = EstadoJuego.Instance;
         if (j == null) return;
+        FijarCantidad(f, Mathf.Clamp(Cantidad(f) + delta, 1, Tope(j, f)));
+        Refrescar();
+    }
 
-        // El pollo y la semilla piden confirmación: tocar dos veces seguidas.
-        if (p == Producto.Pollo || p == Producto.SemillaLegendaria)
+    void PonerMaximo(Fila f)
+    {
+        var j = EstadoJuego.Instance;
+        if (j == null) return;
+        FijarCantidad(f, Tope(j, f));
+        Refrescar();
+    }
+
+    void Pulsar(Fila f)
+    {
+        if (f.compra) Comprar(f); else Vender(f);
+    }
+
+    void Vender(Fila f)
+    {
+        var j = EstadoJuego.Instance;
+        if (j == null) return;
+        Producto p = f.producto;
+
+        // El pollo y la semilla legendaria piden confirmación: tocar dos veces seguidas.
+        if (f.unica)
         {
             bool confirmando = pendiente == p && Time.unscaledTime <= vencePendiente;
             if (!confirmando)
@@ -96,10 +451,24 @@ public class TiendaUI : MonoBehaviour
             pendiente = Producto.Ninguno;
         }
 
-        int total = j.VenderProducto(p, out int cantidad);
+        int pedido = f.unica ? 1 : Cantidad(f);
+        int total = j.VenderCantidad(p, pedido, out int vendidas);
         textoMensaje.text = total > 0
-            ? $"Vendiste {cantidad} de {EstadoJuego.NombreProducto(p)}: +{total} monedas"
+            ? $"Vendiste {vendidas} de {EstadoJuego.NombreProducto(p)}: +{total} monedas"
             : "No tienes nada de eso para vender.";
+        Refrescar();
+    }
+
+    void Comprar(Fila f)
+    {
+        var j = EstadoJuego.Instance;
+        if (j == null) return;
+
+        int n = Cantidad(f);
+        if (j.ComprarSemillas(f.cultivo, n, out int costo))
+            textoMensaje.text = $"Compraste {n} semillas de {CultivoDatos.Nombre(f.cultivo)}: -{costo} monedas";
+        else
+            textoMensaje.text = "No te alcanzan las monedas.";
         Refrescar();
     }
 
@@ -112,9 +481,10 @@ public class TiendaUI : MonoBehaviour
             textoMensaje.text = $"¡Bonificador activo! Lo que vendas de {EstadoJuego.NombreProducto(p)} vale el doble.";
         else
             textoMensaje.text = motivo;
-
         Refrescar();
     }
+
+    // ---------- Actualización de textos ----------
 
     void Refrescar()
     {
@@ -122,44 +492,92 @@ public class TiendaUI : MonoBehaviour
         if (j == null) return;
 
         botonTienda.gameObject.SetActive(j.TieneLlave);
-        if (!panel.activeSelf) return;
+        if (!panel.activeSelf || contenido == null) return;
 
-        Pintar(filaTomates, "Tomates", Producto.Tomate);
-        Pintar(filaHuevos, "Huevos", Producto.Huevo);
-        Pintar(filaSemilla, "Semilla legendaria", Producto.SemillaLegendaria);
-        Pintar(filaPollo, "Pollo", Producto.Pollo);
+        string nueva = CalcularFirma(j);
+        if (nueva != firma)
+        {
+            firma = nueva;
+            Reconstruir(j);
+        }
+
+        foreach (var f in filas) Pintar(j, f);
+        PintarBonus(j);
+    }
+
+    static string TituloProducto(Producto p)
+    {
+        if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.TituloPlural(c);
+        switch (p)
+        {
+            case Producto.Huevo: return "Huevos";
+            case Producto.Pollo: return "Pollo";
+            case Producto.SemillaLegendaria: return "Semilla legendaria";
+            default: return "";
+        }
+    }
+
+    void Pintar(EstadoJuego j, Fila f)
+    {
+        if (f.compra)
+        {
+            int precio = CultivoDatos.PrecioSemilla(f.cultivo);
+            int tope = Tope(j, f);
+            int n = Mathf.Clamp(Cantidad(f), 1, tope);
+            FijarCantidad(f, n);
+
+            f.etiqueta.text = $"Semillas de {CultivoDatos.Nombre(f.cultivo)}: tienes {j.Semillas(f.cultivo)}  ·  {precio} monedas c/u";
+            f.cantidad.text = n.ToString();
+            f.menos.interactable = n > 1;
+            f.mas.interactable = n < tope;
+            f.max.interactable = n < tope;
+            f.accion.text = $"Comprar ({n * precio})";
+            f.boton.interactable = j.Monedas >= n * precio;
+            return;
+        }
+
+        Producto p = f.producto;
+        int stock = j.Cantidad(p);
+        int mult = j.Multiplicador(p);
+        int unidad = j.PrecioBase(p) * mult;
+        string sufijo = mult > 1 ? "  (x2)" : "";
+
+        f.etiqueta.text = $"{TituloProducto(p)}: {stock}  ·  {unidad} monedas c/u{sufijo}";
+
+        if (f.unica)
+        {
+            bool confirmando = pendiente == p && Time.unscaledTime <= vencePendiente;
+            f.accion.text = confirmando ? "¿Seguro?" : $"Vender (+{unidad})";
+            f.boton.interactable = stock > 0;
+            return;
+        }
+
+        int vender = stock > 0 ? Mathf.Clamp(Cantidad(f), 1, stock) : 0;
+        FijarCantidad(f, Mathf.Max(1, vender));
+        f.cantidad.text = vender.ToString();
+        f.menos.interactable = vender > 1;
+        f.mas.interactable = vender < stock;
+        f.max.interactable = vender < stock;
+        f.accion.text = $"Vender (+{vender * unidad})";
+        f.boton.interactable = stock > 0;
+    }
+
+    void PintarBonus(EstadoJuego j)
+    {
+        if (pestana != Pestana.Bonus || estadoBonus == null) return;
 
         if (j.BonusActivo)
         {
             int s = Mathf.CeilToInt(j.SegundosRestantesBonus);
-            textoBonus.text = $"Bonificador activo: {EstadoJuego.NombreProducto(j.ProductoBonus)} x2  ({s / 60}:{s % 60:00})";
+            estadoBonus.text = $"Bonificador activo: {EstadoJuego.NombreProducto(j.ProductoBonus)} x2  ({s / 60}:{s % 60:00})";
         }
         else if (j.SemillasLegendarias > 0)
-        {
-            textoBonus.text = "Gasta una semilla legendaria para duplicar las ganancias de un producto durante un tiempo:";
-        }
+            estadoBonus.text = "Gasta una semilla legendaria para duplicar las ganancias de un producto durante un tiempo:";
         else
-        {
-            textoBonus.text = "Necesitas una semilla legendaria para activar un bonificador.";
-        }
+            estadoBonus.text = "Necesitas una semilla legendaria para activar un bonificador.";
 
         bool puede = !j.BonusActivo && j.SemillasLegendarias > 0;
-        botonBonusTomate.interactable = puede;
-        botonBonusHuevo.interactable = puede;
-        botonBonusPollo.interactable = puede && j.TienePollo;
-    }
-
-    void Pintar(FilaVenta fila, string nombre, Producto p)
-    {
-        var j = EstadoJuego.Instance;
-        int cantidad = j.Cantidad(p);
-        int mult = j.Multiplicador(p);
-        int unidad = j.PrecioBase(p) * mult;
-
-        fila.texto.text = $"{nombre}: {cantidad}\n{unidad} monedas c/u" + (mult > 1 ? "  (x2)" : "");
-
-        bool confirmando = pendiente == p && Time.unscaledTime <= vencePendiente;
-        fila.textoBoton.text = confirmando ? "¿Seguro?" : "Vender";
-        fila.boton.interactable = cantidad > 0;
+        foreach (var fb in filasBonus)
+            fb.boton.interactable = puede && (fb.producto != Producto.Pollo || j.TienePollo);
     }
 }
