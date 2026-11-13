@@ -9,6 +9,7 @@ public class DatosTerreno
 {
     public int id;
     public long ticks;     // hora real del guardado (para calcular cuánto creció mientras estaba cerrado)
+    public bool comprada;  // la parcela con id 0 siempre cuenta como comprada
     public DatosHueco[] huecos = new DatosHueco[0];
 }
 
@@ -30,7 +31,23 @@ public class Terreno : MonoBehaviour
     [Tooltip("Número único de esta parcela (la primera es 0). Las parcelas compradas usarán 1, 2 y 3.")]
     [SerializeField] int idTerreno;
 
+    [Header("Compra (las parcelas con id distinto de 0 empiezan bloqueadas)")]
+    [Tooltip("Monedas que cuesta esta parcela.")]
+    [SerializeField] int precio = 30;
+    [Tooltip("Altura del suelo de la parcela donde se clava el cartel de 'En venta' (unidades de granja).")]
+    [SerializeField] float alturaCartel = 0.05f;
+    [Tooltip("Tamaño del cartel (1 = normal).")]
+    [SerializeField] float escalaCartel = 1f;
+
     Parcela[] huecos;
+    bool comprada;
+    GameObject cartel;
+    Vector3 escalaOriginal;
+    DatosTerreno enRestauracion;
+    readonly List<GameObject> ocultos = new List<GameObject>();
+
+    public bool Comprada => comprada;
+    public int Id => idTerreno;
 
     // Parcelas vivas y datos cargados esperando a que su parcela exista (la granja se coloca después de cargar).
     static readonly List<Terreno> activos = new List<Terreno>();
@@ -39,7 +56,13 @@ public class Terreno : MonoBehaviour
     void Awake()
     {
         huecos = GetComponentsInChildren<Parcela>(true);
+        escalaOriginal = transform.localScale;
+        comprada = idTerreno == 0;
+        foreach (var otro in activos)
+            if (otro != null && otro.idTerreno == idTerreno)
+                Debug.LogWarning("Terreno: hay dos parcelas con el mismo 'Id Terreno' (" + idTerreno + "). Cada una necesita un número distinto.", this);
         activos.Add(this);
+        if (!comprada) Bloquear();
     }
 
     // Espera un fotograma para que los huecos ya hayan hecho su Start (saber si hay llave).
@@ -95,21 +118,100 @@ public class Terreno : MonoBehaviour
 
     DatosTerreno Crear()
     {
-        var d = new DatosTerreno { id = idTerreno, ticks = RelojReal.TicksAhora, huecos = new DatosHueco[huecos.Length] };
-        for (int i = 0; i < huecos.Length; i++) d.huecos[i] = huecos[i] != null ? huecos[i].Exportar() : null;
+        // Si justo se está restaurando, se guarda lo que se cargó (los huecos aún no lo aplicaron).
+        if (enRestauracion != null) return enRestauracion;
+
+        var d = new DatosTerreno
+        {
+            id = idTerreno,
+            ticks = RelojReal.TicksAhora,
+            comprada = comprada,
+            huecos = new DatosHueco[comprada ? huecos.Length : 0]
+        };
+        if (comprada)
+            for (int i = 0; i < huecos.Length; i++) d.huecos[i] = huecos[i] != null ? huecos[i].Exportar() : null;
         return d;
     }
 
     void Aplicar(DatosTerreno d)
     {
+        if (!comprada && d.comprada) Desbloquear(false);
+        if (!comprada) return;
+        enRestauracion = d;
+        StartCoroutine(RestaurarHuecos(d));
+    }
+
+    // Espera un fotograma para que los huecos recién activados hagan su Start.
+    IEnumerator RestaurarHuecos(DatosTerreno d)
+    {
+        yield return null;
         float fuera = RelojReal.Transcurrido(d.ticks);
         for (int i = 0; i < huecos.Length && i < d.huecos.Length; i++)
             if (huecos[i] != null) huecos[i].Restaurar(d.huecos[i], fuera);
+        enRestauracion = null;
+    }
+
+    // ---------- Compra ----------
+
+    // Parcela bloqueada: oculta todo lo que cuelga de ella y deja solo el cartel de "En venta".
+    void Bloquear()
+    {
+        ocultos.Clear();
+        foreach (Transform hijo in transform)
+            if (hijo.gameObject.activeSelf) ocultos.Add(hijo.gameObject);
+        foreach (var g in ocultos) g.SetActive(false);
+        cartel = CartelTerreno.Crear(transform, precio, alturaCartel, escalaCartel);
+    }
+
+    void Desbloquear(bool animar)
+    {
+        comprada = true;
+        if (cartel != null) Destroy(cartel);
+        cartel = null;
+        foreach (var g in ocultos) if (g != null) g.SetActive(true);
+        ocultos.Clear();
+        if (animar) StartCoroutine(Aparecer());
+    }
+
+    IEnumerator Aparecer()
+    {
+        const float duracion = 0.5f;
+        float t = 0f;
+        while (t < duracion)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(t / duracion) - 1f;
+            float s = 1f + 2.70158f * k * k * k + 1.70158f * k * k;   // easeOutBack
+            transform.localScale = escalaOriginal * Mathf.Max(0.01f, s);
+            yield return null;
+        }
+        transform.localScale = escalaOriginal;
+    }
+
+    void SolicitarCompra()
+    {
+        if (EstadoJuego.Instance == null) return;
+        ConfirmarCompraUI.Mostrar("Parcela en venta", precio, EstadoJuego.Instance.Monedas, Comprar);
+    }
+
+    void Comprar()
+    {
+        var juego = EstadoJuego.Instance;
+        if (comprada || juego == null) return;
+        if (!juego.GastarMonedas(precio))
+        {
+            Avisar("No te alcanzan las monedas para esta parcela.");
+            return;
+        }
+        Desbloquear(true);
+        Avisar("¡Parcela comprada! Ya puedes sembrar en ella.");
+        Guardado.GuardarAhora();
     }
 
     // Lo llama Interactuable cuando el toque cae sobre la tierra (no sobre una planta).
     public void Tocar(Vector3 punto)
     {
+        if (!comprada) { SolicitarCompra(); return; }
         if (huecos == null || huecos.Length == 0) return;
 
         Vector3 local = transform.InverseTransformPoint(punto);
