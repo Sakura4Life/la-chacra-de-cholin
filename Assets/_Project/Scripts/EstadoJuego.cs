@@ -342,6 +342,15 @@ public class EstadoJuego : MonoBehaviour
         return total;
     }
 
+    // Gasta monedas (por ejemplo, al comprar una parcela). Devuelve false si no alcanzan.
+    public bool GastarMonedas(int cantidad)
+    {
+        if (cantidad < 0 || Monedas < cantidad) return false;
+        Monedas -= cantidad;
+        OnCambio?.Invoke();
+        return true;
+    }
+
     // Compra semillas de un cultivo con monedas. Devuelve false si no alcanzan las monedas.
     public bool ComprarSemillas(Cultivo c, int cantidad, out int costo)
     {
