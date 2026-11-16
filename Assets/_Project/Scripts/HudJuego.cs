@@ -53,6 +53,8 @@ public class HudJuego : MonoBehaviour
         }
         sb.Append("Huevos: ").Append(j.Huevos);
 
+        if (j.Heno > 0)
+            sb.Append("   Heno: ").Append(j.Heno);
         if (j.SemillasLegendarias > 0)
             sb.Append("   Semilla legendaria: ").Append(j.SemillasLegendarias);
         if (j.BonusActivo)

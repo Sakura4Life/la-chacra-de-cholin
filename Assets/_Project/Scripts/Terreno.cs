@@ -118,6 +118,10 @@ public class Terreno : MonoBehaviour
 
     DatosTerreno Crear()
     {
+        // Datos cargados que aún no se aplicaron: se guardan tal cual (si no, un guardado justo al
+        // colocar la granja los borraría).
+        if (pendientes.TryGetValue(idTerreno, out DatosTerreno sinAplicar)) return sinAplicar;
+
         // Si justo se está restaurando, se guarda lo que se cargó (los huecos aún no lo aplicaron).
         if (enRestauracion != null) return enRestauracion;
 

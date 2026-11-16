@@ -3,7 +3,7 @@ using UnityEngine;
 public class Interactuable : MonoBehaviour
 {
     // Los tipos nuevos van al final para no alterar los valores ya guardados en el prefab.
-    public enum Tipo { Pizarra, Pozo, Parcela, Gallina, Caja, Pollito, Huevo, Gallinero, Granero, Terreno }
+    public enum Tipo { Pizarra, Pozo, Parcela, Gallina, Caja, Pollito, Huevo, Gallinero, Granero, Terreno, Heno, Animal, Corral }
 
     [SerializeField] Tipo tipo;
     public Tipo TipoObjeto => tipo;
@@ -16,6 +16,7 @@ public class Interactuable : MonoBehaviour
     Gallina gallina;
     Pollito pollito;
     Terreno terreno;
+    Corral corral;
 
     // El gallinero y el huevo solo aceptan el toque si hay un huevo listo;
     // si no, el toque pasa de largo hacia lo que haya detrás (la gallina).
@@ -23,6 +24,11 @@ public class Interactuable : MonoBehaviour
     {
         get
         {
+            // El heno solo se toca cuando Cholin pide retirarlo; antes y después el toque pasa de largo
+            // (así no tapa al pollito, al gallinero ni a nada de lo que hay cerca).
+            if (tipo == Tipo.Heno)
+                return MisionController.Instance != null && MisionController.Instance.PideRetirarHeno;
+            if (tipo == Tipo.Gallinero && corral != null) return true;   // el gallinero también abre la ventana de alimentar
             if (tipo == Tipo.Huevo || tipo == Tipo.Gallinero)
                 return gallinaVinculada != null && gallinaVinculada.HuevoListo;
             if (tipo == Tipo.Parcela)
@@ -38,6 +44,7 @@ public class Interactuable : MonoBehaviour
         gallina = GetComponent<Gallina>();
         pollito = GetComponent<Pollito>();
         terreno = GetComponent<Terreno>();
+        corral = GetComponent<Corral>();
     }
 
     void Start()
@@ -47,11 +54,19 @@ public class Interactuable : MonoBehaviour
             if (TutorialController.Instance != null)
                 TutorialController.Instance.Registrar(this);
         }
-        if (tipo == Tipo.Pizarra || tipo == Tipo.Caja || tipo == Tipo.Granero)
+        if (tipo == Tipo.Pizarra || tipo == Tipo.Caja || tipo == Tipo.Granero || tipo == Tipo.Heno)
         {
             if (MisionController.Instance != null)
                 MisionController.Instance.Registrar(this);
         }
+    }
+
+    // Añade un Interactuable a un objeto creado por código y le pone su tipo.
+    public static Interactuable Crear(GameObject objeto, Tipo tipo)
+    {
+        var interactuable = objeto.AddComponent<Interactuable>();
+        interactuable.tipo = tipo;
+        return interactuable;
     }
 
     public void Resaltar(bool valor)
@@ -86,8 +101,27 @@ public class Interactuable : MonoBehaviour
                 break;
 
             case Tipo.Huevo:
-            case Tipo.Gallinero:
                 if (gallinaVinculada != null) gallinaVinculada.TocarHuevo();
+                break;
+
+            case Tipo.Gallinero:
+                if (corral != null) corral.Tocar();
+                else if (gallinaVinculada != null) gallinaVinculada.TocarHuevo();
+                break;
+
+            case Tipo.Heno:
+                bool retirado = MisionController.Instance != null && MisionController.Instance.AlTocarHeno();
+                if (!retirado && tutorial != null) tutorial.Avisar("Es el heno de la chacra.");
+                break;
+
+            case Tipo.Animal:
+                var visual = GetComponentInParent<AnimalVisual>();
+                if (visual != null) visual.Tocar();
+                break;
+
+            case Tipo.Corral:
+                var elCorral = GetComponentInParent<Corral>();
+                if (elCorral != null) elCorral.Tocar();
                 break;
 
             case Tipo.Granero:

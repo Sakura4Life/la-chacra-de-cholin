@@ -47,7 +47,13 @@ public class ControladorGranja : MonoBehaviour
         if (EstadoActual != Estado.Escaneando) return;
 
         var pantalla = Touchscreen.current;
-        if (pantalla == null) return;
+        if (pantalla == null)
+        {
+#if UNITY_EDITOR
+            ColocarSolaEnEditor();
+#endif
+            return;
+        }
 
         var toque = pantalla.primaryTouch;
         if (!toque.press.wasPressedThisFrame) return;
@@ -61,6 +67,32 @@ public class ControladorGranja : MonoBehaviour
             Colocar(impactos[0].pose.position);
         }
     }
+
+#if UNITY_EDITOR
+    // Solo en el Editor (no entra en la APK): sin pantalla táctil nadie puede tocar el plano, así que
+    // la granja se coloca sola en el centro de la pantalla cuando XR Simulation detecta un plano
+    // (o, tras 6 s sin planos, delante de la cámara). Sirve para probar el juego sin teléfono.
+    private float esperaEditor;
+
+    private void ColocarSolaEnEditor()
+    {
+        if (Granja != null || granjaPrefab == null) return;
+        esperaEditor += Time.unscaledDeltaTime;
+        if (esperaEditor < 1.5f) return;
+
+        var centro = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        if (raycastManager != null && raycastManager.Raycast(centro, impactos, TrackableType.PlaneWithinPolygon))
+        {
+            Colocar(impactos[0].pose.position);
+        }
+        else if (esperaEditor > 6f && camara != null)
+        {
+            Vector3 p = camara.position + camara.forward * 0.8f;
+            p.y = camara.position.y - 0.9f;
+            Colocar(p);
+        }
+    }
+#endif
 
     // Lo llama el botón "Reubicar": mueve la granja conservando los planos ya detectados.
     public void Reubicar()

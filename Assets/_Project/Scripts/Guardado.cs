@@ -15,6 +15,7 @@ public class DatosGuardado
     public DatosPedido pedido;   // pedido de la caja (null en partidas anteriores a la 12b-3)
     public DatosTerreno[] terrenos;   // huecos de cultivo (null en partidas anteriores a la 12c)
     public DatosGallina gallina;      // gallina y huevos (valido = false en partidas anteriores a la 12c)
+    public DatosCorral[] corrales;    // animales de los corrales (null en partidas anteriores a la 13a)
     public bool enPausa;              // se guardó con el menú de pausa abierto
 }
 
@@ -36,6 +37,7 @@ public class Guardado : MonoBehaviour
         PedidosCaja.Limpiar();
         Terreno.Limpiar();
         Gallina.Limpiar();
+        Corral.Limpiar();
         RelojReal.TopeSegundos = Mathf.Max(0f, maxHorasFuera) * 3600f;
         bloqueado = false;
     }
@@ -80,6 +82,7 @@ public class Guardado : MonoBehaviour
             pedido = PedidosCaja.Exportar(),
             terrenos = Terreno.ExportarTodos(),
             gallina = Gallina.Exportar(),
+            corrales = Corral.ExportarTodos(),
             enPausa = PausaJuego.MenuAbierto || PausaJuego.PendienteReabrir
         };
 
@@ -147,6 +150,7 @@ public class Guardado : MonoBehaviour
         PedidosCaja.Preparar(datos.pedido);
         Terreno.Preparar(datos.terrenos);
         Gallina.Preparar(datos.gallina);
+        Corral.Preparar(datos.corrales);
 
         if (TutorialController.Instance != null)
             TutorialController.Instance.Avisar("Partida cargada. Escanea el piso para colocar tu granja.", 4f);

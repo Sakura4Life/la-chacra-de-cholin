@@ -13,7 +13,7 @@ public class DatosGallina
     public long ticks;       // hora real del guardado
 }
 
-public class Gallina : MonoBehaviour
+public class Gallina : MonoBehaviour, IReproductor
 {
     enum Estado { Hambrienta, Comiendo }
 
@@ -22,6 +22,7 @@ public class Gallina : MonoBehaviour
     [SerializeField] GameObject modeloGallina;
     [SerializeField] AnimacionAve animacion;
     [SerializeField] SphereCollider colision;
+    [Tooltip("Ya no se usa: los huevos se muestran con el icono del Corral. Puedes borrar este objeto del prefab.")]
     [SerializeField] GameObject huevo;
     [Tooltip("Opcional: partículas al convertirse en gallina.")]
     [SerializeField] ParticleSystem efectoCrecer;
@@ -33,17 +34,8 @@ public class Gallina : MonoBehaviour
     [SerializeField] float radioColisionGallina = 0.08f;
 
     [Header("Huevo")]
-    [Tooltip("Punto sobre el gallinero donde aparece el huevo.")]
-    [SerializeField] Transform puntoHuevo;
-    [Tooltip("Resaltado del gallinero: brilla mientras haya un huevo esperando.")]
+    [Tooltip("Resaltado del gallinero: solo brilla con el primer huevo (tutorial).")]
     [SerializeField] Resaltado resaltadoGallinero;
-    [Tooltip("Radio del área de toque del huevo, en unidades de granja. Más grande = más fácil de tocar.")]
-    [SerializeField] float radioToqueHuevo = 0.05f;
-    [SerializeField] float duracionAparicion = 0.35f;
-    [Tooltip("Cuántos huevos se pueden acumular en el gallinero antes de pedir que los recojas.")]
-    [SerializeField] int maxHuevosAcumulados = 6;
-    [Tooltip("Separación entre los huevos acumulados, en unidades de granja.")]
-    [SerializeField] float separacionHuevos = 0.03f;
 
     [Header("Recorrido por el gallinero")]
     [Tooltip("Pie de la rampa (donde se suelta al pollito).")]
@@ -62,14 +54,16 @@ public class Gallina : MonoBehaviour
 
     Estado estado = Estado.Hambrienta;
     Vector3 escalaPollito = Vector3.one;
-    Vector3 escalaHuevo = Vector3.one;
     bool adulto;
     bool ocupada;
     bool arriba;
     bool completo;
     int ultimoPuesto = -1;
+    bool reservada;          // el corral la tiene esperando o emparejándose
+    bool moviendoPropio;     // dentro de Mover (su paseo normal)
+    bool moviendoExterno;    // yendo a donde la manda el corral
+    bool saltando;
     int pendientes;
-    readonly List<GameObject> huevos = new List<GameObject>();
     double inicioComer;   // hora real (RelojReal.Ahora) en que empezó a comer
 
     static Gallina activa;
@@ -78,15 +72,17 @@ public class Gallina : MonoBehaviour
     // Lo usan el huevo y el gallinero para saber si aceptan el toque.
     public bool HuevoListo => enabled && !ocupada && pendientes > 0;
 
+    // Huevos esperando; los muestra el icono del Corral junto con los de las demás gallinas.
+    public int Pendientes => enabled ? pendientes : 0;
+    public bool Comiendo => estado == Estado.Comiendo;
+
     void Awake()
     {
         activa = this;
         escalaPollito = modeloPollito.transform.localScale;
-        escalaHuevo = huevo.transform.localScale;
-        huevos.Add(huevo);
         modeloPollito.SetActive(true);
         modeloGallina.SetActive(false);
-        huevo.SetActive(false);
+        if (huevo != null) huevo.SetActive(false);
         PonerColision(radioColisionPollito);
     }
 
@@ -132,11 +128,8 @@ public class Gallina : MonoBehaviour
     {
         float fuera = RelojReal.Transcurrido(d.ticks);
 
-        for (int i = 0; i < d.pendientes && pendientes < maxHuevosAcumulados; i++)
-        {
-            pendientes++;
-            AgregarHuevo();
-        }
+        pendientes = Mathf.Clamp(d.pendientes, 0, Corral.TopeSinCorral);
+        if (pendientes > 0) BrilloPrimerHuevo();
 
         // Si estaba comiendo, retoma desde donde iba; si el tiempo ya pasó, termina enseguida y pone el huevo.
         if (d.comiendo) StartCoroutine(Comer(d.comido + fuera));
@@ -158,12 +151,21 @@ public class Gallina : MonoBehaviour
         switch (estado)
         {
             case Estado.Hambrienta:
-                if (pendientes >= maxHuevosAcumulados)
+                if (Corral.GallineroLleno)
                 {
-                    Avisar("Hay muchos huevos esperando. Recógelos tocando el gallinero o un huevo.");
+                    Avisar("Hay muchos huevos esperando. Recógelos tocando el gallinero.");
                     break;
                 }
-                // La gallina solo come choclo.
+                // Terminada la misión del pollito: por defecto come heno; el choclo se da desde el gallinero.
+                var mision = MisionController.Instance;
+                if (mision != null && mision.SolarLibre)
+                {
+                    Alimentar(Alimento.Heno, out string respuesta);
+                    Avisar(respuesta);
+                    break;
+                }
+
+                // Durante la misión solo come choclo.
                 bool hayChoclo = modoPrueba || (juego != null && juego.GastarCosecha(Cultivo.Maiz));
                 if (hayChoclo)
                 {
@@ -179,101 +181,90 @@ public class Gallina : MonoBehaviour
         }
     }
 
+    // ---------- Alimentar desde la ventana del corral ----------
+
+    // La gallina del tutorial vive en el gallinero: cuenta como una gallina más del corral.
+    public bool EnGallinero { get { return enabled; } }
+    public bool EsAdulta { get { return adulto; } }
+
+    public bool PuedeComer(out string texto)
+    {
+        if (!enabled) { texto = "no está"; return false; }
+        if (ocupada) { texto = "creciendo..."; return false; }
+        if (estado == Estado.Comiendo) { texto = "comiendo..."; return false; }
+        if (Corral.GallineroLleno) { texto = "hay muchos huevos esperando"; return false; }
+        texto = "tiene hambre";
+        return true;
+    }
+
+    // Da de comer con 'alimento' (heno o choclo). Devuelve false y el motivo si no se pudo.
+    public bool Alimentar(Alimento alimento, out string mensaje)
+    {
+        if (!PuedeComer(out string texto)) { mensaje = "Ahora no puede comer: " + texto + "."; return false; }
+        if (!AnimalDatos.Acepta(Animal.Gallina, alimento))
+        {
+            mensaje = "La gallina no come " + AlimentoDatos.Nombre(alimento) + ".";
+            return false;
+        }
+
+        var juego = EstadoJuego.Instance;
+        if (!modoPrueba && (juego == null || !juego.GastarAlimento(alimento)))
+        {
+            mensaje = alimento == Alimento.Heno
+                ? "No tienes heno. Puedes darle choclo tocando el gallinero, o comprar heno en la tienda."
+                : "No tienes " + AlimentoDatos.Nombre(alimento) + ".";
+            return false;
+        }
+
+        StartCoroutine(Comer());
+        mensaje = "Está comiendo y en un rato pondrá un huevo.";
+        return true;
+    }
+
     // Toque sobre el huevo o sobre el gallinero (lo llama Interactuable).
     public void TocarHuevo()
     {
         if (HuevoListo) Recoger();
     }
 
-    // Recoge todos los huevos acumulados de una vez.
+    // Recoge todos los huevos acumulados de una vez (caso sin Corral).
     void Recoger()
     {
-        int n = pendientes;
+        int n = TomarHuevos();
+        if (n <= 0) return;
+
         var juego = EstadoJuego.Instance;
         if (juego != null)
             for (int i = 0; i < n; i++) juego.SumarHuevo();
 
-        pendientes = 0;
-        OcultarHuevos();
         Avisar(n == 1 ? "¡Recogiste un huevo!" : $"¡Recogiste {n} huevos!");
         if (MisionController.Instance != null) MisionController.Instance.AlRecogerHuevo();
     }
 
+    // Entrega los huevos acumulados y los pone a cero. Lo usa el Corral para recoger todo junto.
+    public int TomarHuevos()
+    {
+        if (!HuevoListo) return 0;
+        int n = pendientes;
+        pendientes = 0;
+        QuitarBrillo();
+        return n;
+    }
+
     // ---------- Huevos ----------
+    // El huevo ya no se dibuja aquí: lo muestra el icono del Corral (un modelo que gira con el número).
 
-    GameObject ObtenerHuevo(int i)
+    // El gallinero solo brilla con el primer huevo (tutorial).
+    void BrilloPrimerHuevo()
     {
-        while (huevos.Count <= i)
-        {
-            var copia = Instantiate(huevo, huevo.transform.parent);
-            copia.name = huevo.name + (huevos.Count + 1);
-            copia.SetActive(false);
-            huevos.Add(copia);
-        }
-        return huevos[i];
+        var mision = MisionController.Instance;
+        if (resaltadoGallinero != null && mision != null && mision.EsperandoPrimerHuevo)
+            resaltadoGallinero.Activar(true);
     }
 
-    Vector3 PosicionHuevo(int i)
+    void QuitarBrillo()
     {
-        if (i == 0) return Vector3.zero;
-        float ang = (i - 1) * 72f * Mathf.Deg2Rad;
-        return new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * separacionHuevos;
-    }
-
-    // Muestra sobre el gallinero el huevo recién puesto (el número 'pendientes').
-    void AgregarHuevo()
-    {
-        int i = pendientes - 1;
-        var g = ObtenerHuevo(i);
-        var t = g.transform;
-
-        if (puntoHuevo != null)
-        {
-            t.SetParent(puntoHuevo, false);
-            t.localPosition = PosicionHuevo(i);
-            t.localRotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-        }
-        t.localScale = Vector3.zero;
-
-        // Área de toque generosa, creada por código.
-        var col = g.GetComponent<SphereCollider>();
-        if (col == null) col = g.AddComponent<SphereCollider>();
-        col.center = Vector3.zero;
-        col.radius = radioToqueHuevo / Mathf.Max(0.0001f, escalaHuevo.x);
-
-        g.SetActive(true);
-        var res = g.GetComponent<Resaltado>();
-        if (res != null) res.Activar(true);
-        if (resaltadoGallinero != null) resaltadoGallinero.Activar(true);
-        StartCoroutine(Aparecer(t));
-    }
-
-    void OcultarHuevos()
-    {
-        foreach (var g in huevos)
-        {
-            if (g == null) continue;
-            var res = g.GetComponent<Resaltado>();
-            if (res != null) res.Activar(false);
-            g.SetActive(false);
-        }
         if (resaltadoGallinero != null) resaltadoGallinero.Activar(false);
-    }
-
-    IEnumerator Aparecer(Transform t)
-    {
-        float d = Mathf.Max(0.05f, duracionAparicion);
-        float x = 0f;
-        while (x < d)
-        {
-            x += Time.deltaTime;
-            if (t == null || !t.gameObject.activeSelf) yield break;
-            float k = Mathf.Clamp01(x / d);
-            float s = Mathf.Sin(k * Mathf.PI * 0.5f) + 0.15f * Mathf.Sin(k * Mathf.PI);
-            t.localScale = escalaHuevo * s;
-            yield return null;
-        }
-        t.localScale = escalaHuevo;
     }
 
     // ---------- Comer, crecer y subir la rampa ----------
@@ -306,10 +297,10 @@ public class Gallina : MonoBehaviour
         // Vuelve a tener hambre y sigue paseando; el huevo espera en el gallinero.
         pendientes++;
         estado = Estado.Hambrienta;
-        AgregarHuevo();
+        BrilloPrimerHuevo();
         Poner(AnimacionAve.Anim.Reposo);
         Avisar(pendientes == 1
-            ? "¡Puso un huevo! Tócalo, o toca el gallinero, para recogerlo."
+            ? "¡Puso un huevo! Toca el gallinero para recogerlo."
             : $"¡Otro huevo! Ya hay {pendientes} esperando en el gallinero.");
     }
 
@@ -371,9 +362,83 @@ public class Gallina : MonoBehaviour
         StopAllCoroutines();
         pendiente = null;
         ocupada = false;
+        reservada = false;
+        moviendoPropio = false;
+        moviendoExterno = false;
+        saltando = false;
         pendientes = 0;
-        OcultarHuevos();
+        QuitarBrillo();
         enabled = false;
+    }
+
+    // ---------- Cría (la gallina del tutorial también puede ser madre) ----------
+
+    // Puntos del recorrido: el Corral los usa para que las demás gallinas paseen por el mismo sitio.
+    public Transform PuntoGallinero { get { return puntoGallinero; } }
+    public Transform PuntoRampa { get { return puntoRampa; } }
+    public Transform[] Ruta { get { return puestos; } }
+
+    // Adulta y libre: puede ser elegida por un gallo.
+    public bool DisponibleParaCriar
+    {
+        get { return enabled && adulto && !ocupada && !reservada && !arriba && estado == Estado.Hambrienta; }
+    }
+
+    public Transform Cuerpo { get { return transform; } }
+    public bool Moviendo { get { return moviendoPropio || moviendoExterno; } }
+    public bool Saltando { get { return saltando; } }
+    public bool Arriba { get { return arriba; } }
+
+    // true = se queda quieta (su vida normal se detiene); false = vuelve a pasear.
+    public void Reservar(bool valor) { reservada = valor; }
+
+    public void IrAMundo(Vector3 mundo, float velocidadLocal)
+    {
+        StartCoroutine(IrExterno(mundo));
+    }
+
+    IEnumerator IrExterno(Vector3 mundo)
+    {
+        moviendoExterno = true;
+        while (moviendoPropio) yield return null;   // su paseo normal se corta solo al estar reservada
+
+        if (arriba)
+        {
+            yield return StartCoroutine(Mover(Local(puntoGallinero), false));
+            arriba = false;
+        }
+        Vector3 destino = transform.parent != null ? transform.parent.InverseTransformPoint(mundo) : mundo;
+        yield return StartCoroutine(Mover(destino, false));
+        moviendoExterno = false;
+    }
+
+    public void MirarMundo(Vector3 punto)
+    {
+        Orientar(transform.parent != null ? transform.parent.InverseTransformPoint(punto) : punto);
+    }
+
+    public void Saltitos(int veces)
+    {
+        if (saltando || veces <= 0) return;
+        StartCoroutine(Saltar(veces));
+    }
+
+    IEnumerator Saltar(int veces)
+    {
+        saltando = true;
+        Vector3 suelo = transform.localPosition;
+        for (int i = 0; i < veces; i++)
+        {
+            float t = 0f;
+            while (t < 0.32f)
+            {
+                t += Time.deltaTime;
+                transform.localPosition = suelo + Vector3.up * (Mathf.Sin(Mathf.Clamp01(t / 0.32f) * Mathf.PI) * 0.018f);
+                yield return null;
+            }
+        }
+        transform.localPosition = suelo;
+        saltando = false;
     }
 
     // ---------- Vida diaria ----------
@@ -451,11 +516,12 @@ public class Gallina : MonoBehaviour
     IEnumerator Mover(Vector3 destino, bool interrumpible)
     {
         completo = false;
+        moviendoPropio = true;
         Poner(AnimacionAve.Anim.Caminar);
 
         while (true)
         {
-            if (interrumpible && Interrumpida()) yield break;
+            if (interrumpible && Interrumpida()) { moviendoPropio = false; yield break; }
 
             Vector3 pos = transform.localPosition;
             Vector3 resto = destino - pos;
@@ -470,11 +536,26 @@ public class Gallina : MonoBehaviour
             }
 
             transform.localPosition = Vector3.MoveTowards(pos, destino, velocidad * Time.deltaTime);
+            AjustarARampa();
             yield return null;
         }
 
+        moviendoPropio = false;
         completo = true;
         Poner(AnimacionAve.Anim.Reposo);
+    }
+
+    // Sobre la rampa del gallinero sube o baja siguiendo su superficie (para no atravesarla).
+    void AjustarARampa()
+    {
+        var corral = Corral.De(Animal.Gallina);
+        if (corral == null) return;
+        Vector3 l = corral.transform.InverseTransformPoint(transform.position);
+        if (corral.AlturaRampa(l, out float y))
+        {
+            l.y = y;
+            transform.position = corral.transform.TransformPoint(l);
+        }
     }
 
     IEnumerator Esperar(float segundos)
@@ -487,7 +568,7 @@ public class Gallina : MonoBehaviour
         }
     }
 
-    bool Interrumpida() { return ocupada || estado != Estado.Hambrienta; }
+    bool Interrumpida() { return ocupada || reservada || estado != Estado.Hambrienta; }
 
     Vector3 ElegirPuesto()
     {
