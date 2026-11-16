@@ -116,3 +116,8 @@ InitTestScene*.unity*
 # Herramienta local de Editor (registro de compilacion), no forma parte del juego
 /Assets/_Project/Editor/
 /Assets/_Project/Editor.meta
+
+/Assets/XR/Temp/
+/Assets/XR/Temp.meta
+/ProjectSettings/Packages/
+

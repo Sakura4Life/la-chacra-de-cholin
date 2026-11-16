@@ -4,11 +4,11 @@ using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
-// Tienda con 3 pestañas: Vender, Comprar semillas y Bonus. Todo el contenido se crea por código
+// Tienda con 5 pestañas: Vender, Semillas, Bonus, Edificios y Animales. Todo el contenido se crea por código
 // dentro del panel que ya tienes; los elementos antiguos de la tienda se ocultan solos.
 public class TiendaUI : MonoBehaviour
 {
-    enum Pestana { Vender, Semillas, Bonus }
+    enum Pestana { Vender, Semillas, Bonus, Edificios, Animales }
 
     [Header("Abrir y cerrar")]
     [SerializeField] Button botonTienda;
@@ -59,6 +59,16 @@ public class TiendaUI : MonoBehaviour
         public Button boton;
     }
 
+    // Fila genérica de las pestañas Edificios y Animales: texto y botón calculados en cada refresco.
+    class FilaGen
+    {
+        public TMP_Text etiqueta, accion;
+        public Button boton;
+        public System.Func<string> texto;
+        public System.Func<string> textoAccion;
+        public System.Func<bool> activa;
+    }
+
     RectTransform contenido;
     ScrollRect scroll;
     TMP_Text estadoBonus;
@@ -66,6 +76,7 @@ public class TiendaUI : MonoBehaviour
     readonly List<TMP_Text> textosPestana = new List<TMP_Text>();
     readonly List<Fila> filas = new List<Fila>();
     readonly List<FilaBonus> filasBonus = new List<FilaBonus>();
+    readonly List<FilaGen> filasGen = new List<FilaGen>();
 
     Pestana pestana = Pestana.Vender;
     string firma = "";
@@ -161,7 +172,7 @@ public class TiendaUI : MonoBehaviour
         capaBarra.childForceExpandWidth = true;
         capaBarra.childForceExpandHeight = true;
 
-        string[] nombres = { "Vender", "Comprar semillas", "Bonus" };
+        string[] nombres = { "Vender", "Semillas", "Bonus", "Edificios", "Animales" };
         for (int i = 0; i < nombres.Length; i++)
         {
             var p = (Pestana)i;
@@ -353,7 +364,7 @@ public class TiendaUI : MonoBehaviour
     {
         var sb = new System.Text.StringBuilder();
         sb.Append((int)pestana).Append(':');
-        if (pestana == Pestana.Semillas) return sb.ToString();
+        if (pestana != Pestana.Vender && pestana != Pestana.Bonus) return sb.ToString();
         foreach (var p in ProductosVisibles(j, pestana == Pestana.Vender)) sb.Append((int)p).Append(',');
         return sb.ToString();
     }
@@ -368,6 +379,7 @@ public class TiendaUI : MonoBehaviour
         }
         filas.Clear();
         filasBonus.Clear();
+        filasGen.Clear();
         estadoBonus = null;
 
         switch (pestana)
@@ -390,7 +402,154 @@ public class TiendaUI : MonoBehaviour
                 estadoBonus.gameObject.AddComponent<LayoutElement>().preferredHeight = 120f;
                 foreach (var p in ProductosVisibles(j, false)) CrearFilaBonus(p);
                 break;
+
+            case Pestana.Edificios:
+                CrearFilasEdificios();
+                break;
+
+            case Pestana.Animales:
+                CrearFilasAnimales();
+                break;
         }
+    }
+
+    // ---------- Pestañas Edificios y Animales ----------
+
+    FilaGen CrearFilaGen(string nombre, System.Func<string> texto, System.Func<string> textoAccion,
+                         System.Func<bool> activa, UnityAction alPulsar)
+    {
+        var fila = new FilaGen { texto = texto, textoAccion = textoAccion, activa = activa };
+
+        var rt = Hijo("Gen_" + nombre, contenido);
+        rt.gameObject.AddComponent<Image>().color = colorFila;
+        var vertical = rt.gameObject.AddComponent<VerticalLayoutGroup>();
+        vertical.padding = new RectOffset(16, 16, 10, 10);
+        vertical.spacing = 8f;
+        vertical.childControlWidth = true;
+        vertical.childControlHeight = true;
+        vertical.childForceExpandWidth = true;
+        vertical.childForceExpandHeight = false;
+
+        fila.etiqueta = CrearTexto(rt, "Etiqueta", 30f, TextAlignmentOptions.MidlineLeft, colorTexto);
+        fila.etiqueta.gameObject.AddComponent<LayoutElement>().preferredHeight = 110f;
+
+        fila.boton = CrearBoton(rt, "Accion", "", 0f, 90f, colorBoton, colorTextoBoton, alPulsar, out fila.accion);
+
+        filasGen.Add(fila);
+        return fila;
+    }
+
+    void CrearFilasEdificios()
+    {
+        foreach (Edificio e in System.Enum.GetValues(typeof(Edificio)))
+        {
+            Edificio edificio = e;
+            CrearFilaGen("Edificio_" + e,
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    var m = MisionController.Instance;
+                    string n = EdificioDatos.Nombre(edificio);
+                    if (j != null && j.TieneEdificio(edificio)) return n + ": ya lo tienes.";
+                    if (m == null || !m.SolarLibre)
+                        return n + " (" + EdificioDatos.Precio(edificio) + " monedas): termina la misión del pollito y retira el heno para tener sitio.";
+                    return n + ": " + EdificioDatos.Precio(edificio) + " monedas. Se coloca donde estaba el heno.";
+                },
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    return j != null && j.TieneEdificio(edificio) ? "Comprado" : "Comprar (" + EdificioDatos.Precio(edificio) + ")";
+                },
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    var m = MisionController.Instance;
+                    return j != null && m != null && m.SolarLibre && !j.TieneEdificio(edificio)
+                           && SolarEdificios.Instance != null && j.Monedas >= EdificioDatos.Precio(edificio);
+                },
+                () => ComprarEdificio(edificio));
+        }
+    }
+
+    void CrearFilasAnimales()
+    {
+        foreach (var a in AnimalDatos.Disponibles)
+        {
+            Animal animal = a;
+            CrearFilaGen("Animal_" + a,
+                () =>
+                {
+                    var c = Corral.De(animal);
+                    string cupo = c != null ? c.TextoCupo(animal) : "sin corral";
+                    string basico = AnimalDatos.TituloPlural(animal) + ": " + cupo + "  ·  " + AnimalDatos.PrecioCompra(animal)
+                                    + " monedas c/u";
+                    return Corral.PuedeComprar(animal, out string motivo) ? basico : basico + "\n" + motivo;
+                },
+                () => "Comprar (" + AnimalDatos.PrecioCompra(animal) + ")",
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    return j != null && Corral.PuedeComprar(animal, out _) && j.Monedas >= AnimalDatos.PrecioCompra(animal);
+                },
+                () => ComprarAnimal(animal));
+        }
+
+        foreach (int n in new[] { 1, 5 })
+        {
+            int raciones = n;
+            CrearFilaGen("Heno_" + n,
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    var m = MisionController.Instance;
+                    string basico = "Heno: tienes " + (j != null ? j.Heno : 0) + " raciones  ·  " + AnimalDatos.PrecioHeno + " monedas c/u";
+                    return m != null && m.SolarLibre ? basico : basico + "\nTermina la misión del pollito primero.";
+                },
+                () => "Comprar x" + raciones + " (" + raciones * AnimalDatos.PrecioHeno + ")",
+                () =>
+                {
+                    var j = EstadoJuego.Instance;
+                    var m = MisionController.Instance;
+                    return j != null && m != null && m.SolarLibre && j.Monedas >= raciones * AnimalDatos.PrecioHeno;
+                },
+                () => ComprarHeno(raciones));
+        }
+    }
+
+    void PintarGenericas()
+    {
+        foreach (var f in filasGen)
+        {
+            f.etiqueta.text = f.texto();
+            f.accion.text = f.textoAccion();
+            f.boton.interactable = f.activa();
+        }
+    }
+
+    void ComprarEdificio(Edificio e)
+    {
+        var solar = SolarEdificios.Instance;
+        if (solar == null) { textoMensaje.text = "Coloca primero tu granja."; return; }
+        solar.Comprar(e, out string mensaje);
+        textoMensaje.text = mensaje;
+        Refrescar();
+    }
+
+    void ComprarAnimal(Animal a)
+    {
+        Corral.Comprar(a, out string mensaje);
+        textoMensaje.text = mensaje;
+        Refrescar();
+    }
+
+    void ComprarHeno(int raciones)
+    {
+        var j = EstadoJuego.Instance;
+        if (j == null) return;
+        textoMensaje.text = j.ComprarHeno(raciones, out int costo)
+            ? "Compraste " + raciones + " raciones de heno: -" + costo + " monedas."
+            : "No te alcanzan las monedas.";
+        Refrescar();
     }
 
     // ---------- Acciones ----------
@@ -503,6 +662,7 @@ public class TiendaUI : MonoBehaviour
 
         foreach (var f in filas) Pintar(j, f);
         PintarBonus(j);
+        PintarGenericas();
     }
 
     static string TituloProducto(Producto p)

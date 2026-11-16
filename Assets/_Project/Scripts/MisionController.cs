@@ -9,7 +9,8 @@ public class MisionController : MonoBehaviour
     {
         Inactiva, BuscarSemillas, EsperandoCosecha, AvisoPedido, LeyendoPedido,
         EntregandoPedido, AvisoPollito, LeyendoPollito,
-        PollitoActiva, PollitoEncontrado, PollitoEnGallinero, Libre
+        PollitoActiva, PollitoEncontrado, PollitoEnGallinero, Libre,
+        RetirarHeno, HenoRetirado
     }
 
     [Tooltip("Choclos que pide el primer pedido de la pizarra.")]
@@ -37,13 +38,26 @@ public class MisionController : MonoBehaviour
     string textoGallinero =
         "Nota:\n\nEl pollito está a salvo contigo. Llévalo al gallinero para que crezca.";
 
+    [Tooltip("Raciones de heno que te llevas al retirar el heno del solar.")]
+    [SerializeField] int racionesHenoIniciales = 10;
+
+    [TextArea(3, 6)]
+    [SerializeField]
+    string textoHeno =
+        "Cholin:\n\nLa chacra ya funciona. Ese montón de heno estorba: retíralo tocándolo y guárdalo, porque tus animales lo comen. Así queda sitio para un edificio nuevo que podrás comprar en la tienda.";
+
+    [TextArea(3, 6)]
+    [SerializeField]
+    string textoHenoRetirado =
+        "Cholin:\n\n¡Listo! Te quedaste con {0} raciones de heno. Ahora puedes comprar el criadero de cuy en la tienda, pestaña Edificios.";
+
     [TextArea(3, 6)]
     [SerializeField]
     string textoLibre =
         "Nota:\n\nLa chacra está viva otra vez. Cuida tus cultivos y a tu pollito.";
 
     Paso paso = Paso.Inactiva;
-    Interactuable pizarra, caja, granero;
+    Interactuable pizarra, caja, granero, heno;
     int entregadosBase;
 
     public bool BuscandoSemillas => paso == Paso.BuscarSemillas;
@@ -55,6 +69,11 @@ public class MisionController : MonoBehaviour
     public bool PollitoYaEncontrado => paso == Paso.PollitoEncontrado;
     public bool PollitoEnGallinero => paso >= Paso.PollitoEnGallinero;
     public bool PollitoVisible => paso >= Paso.PollitoActiva;
+    // El solar del heno queda libre cuando ya retiraste el heno.
+    public bool SolarLibre => paso >= Paso.HenoRetirado;
+    public bool PideRetirarHeno => paso == Paso.RetirarHeno;
+    // Solo el primer huevo (tutorial) hace brillar el gallinero; después ya no.
+    public bool EsperandoPrimerHuevo => paso == Paso.PollitoEnGallinero;
     public int PasoActual => (int)paso;
     public int EntregadosBase => entregadosBase;
 
@@ -64,6 +83,7 @@ public class MisionController : MonoBehaviour
         var p = (Paso)valor;
         if (p == Paso.LeyendoPedido) p = Paso.AvisoPedido;     // lectura transitoria
         if (p == Paso.LeyendoPollito) p = Paso.AvisoPollito;
+        if (p == Paso.Libre) p = Paso.RetirarHeno;             // la nota de Cholin ya se leyó
 
         FijarPista("");
         entregadosBase = baseEntregados;
@@ -103,6 +123,7 @@ public class MisionController : MonoBehaviour
         if (objeto.TipoObjeto == Interactuable.Tipo.Pizarra) pizarra = objeto;
         else if (objeto.TipoObjeto == Interactuable.Tipo.Caja) caja = objeto;
         else if (objeto.TipoObjeto == Interactuable.Tipo.Granero) granero = objeto;
+        else if (objeto.TipoObjeto == Interactuable.Tipo.Heno) heno = objeto;
         AplicarResaltado();
     }
 
@@ -127,8 +148,12 @@ public class MisionController : MonoBehaviour
             case Paso.PollitoEncontrado:
                 Nota(textoGallinero, null);
                 return true;
+            case Paso.RetirarHeno:
+                Nota(textoHeno, null);
+                return true;
             case Paso.PollitoEnGallinero:
             case Paso.Libre:
+            case Paso.HenoRetirado:
                 Nota(textoLibre, null);
                 return true;
             default:
@@ -169,6 +194,19 @@ public class MisionController : MonoBehaviour
         if (paso != Paso.PollitoEncontrado) return;
         if (EstadoJuego.Instance != null) EstadoJuego.Instance.PonerPolloEnGallinero();
         IrA(Paso.PollitoEnGallinero);
+    }
+
+    // La llama Interactuable al tocar el heno. Devuelve true si la misión se encargó del toque.
+    public bool AlTocarHeno()
+    {
+        if (paso != Paso.RetirarHeno) return false;
+
+        // Primero se entrega el heno y se cambia de paso, para que un doble toque no lo duplique.
+        if (EstadoJuego.Instance != null) EstadoJuego.Instance.SumarHeno(racionesHenoIniciales);
+        IrA(Paso.HenoRetirado);
+        Nota(string.Format(textoHenoRetirado, racionesHenoIniciales), null);
+        Ajustes.Vibrar();
+        return true;
     }
 
     // La llama Gallina cada vez que recoges un huevo; solo la primera vez cambia el paso.
@@ -249,6 +287,13 @@ public class MisionController : MonoBehaviour
                 break;
             case Paso.Libre:
                 FijarPista("");
+                Nota(textoHeno, () => IrA(Paso.RetirarHeno));
+                break;
+            case Paso.RetirarHeno:
+                FijarPista("Toca el heno que brilla para retirarlo y dejar sitio a un edificio nuevo.");
+                break;
+            case Paso.HenoRetirado:
+                FijarPista("");
                 break;
         }
     }
@@ -262,6 +307,8 @@ public class MisionController : MonoBehaviour
             caja.Resaltar(paso == Paso.EntregandoPedido);
         if (granero != null)
             granero.Resaltar(paso == Paso.BuscarSemillas);
+        if (heno != null)
+            heno.Resaltar(paso == Paso.RetirarHeno);
     }
 
     string TextoProgreso(int entregados)

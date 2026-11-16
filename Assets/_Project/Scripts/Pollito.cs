@@ -73,7 +73,7 @@ public class Pollito : MonoBehaviour
         if (modoPrueba && !posicionado)
         {
             posicionado = true;
-            transform.localPosition = puntoGallinero.localPosition;
+            transform.localPosition = PosicionGallinero();
             if (gallina != null) gallina.enabled = true;
         }
 
@@ -99,7 +99,7 @@ public class Pollito : MonoBehaviour
                 gallina.Restaurar(juego.PolloAdulto);
                 gallina.enabled = true;
             }
-            else transform.localPosition = puntoGallinero.localPosition;
+            else transform.localPosition = PosicionGallinero();
         }
 
         bool encontrado = mision.PollitoYaEncontrado;
@@ -224,10 +224,19 @@ public class Pollito : MonoBehaviour
         }
     }
 
+    // Posición de PuntoGallinero en el espacio de la granja, esté donde esté en la jerarquía
+    // (suelto en la raíz o como hijo del Gallinero).
+    Vector3 PosicionGallinero()
+    {
+        return transform.parent != null
+            ? transform.parent.InverseTransformPoint(puntoGallinero.position)
+            : puntoGallinero.position;
+    }
+
     void Soltar()
     {
         Vector3 p = transform.localPosition;
-        Vector3 destino = puntoGallinero.localPosition;
+        Vector3 destino = PosicionGallinero();
         float distancia = new Vector2(p.x - destino.x, p.z - destino.z).magnitude;
 
         if (distancia <= radioSoltar)

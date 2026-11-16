@@ -15,6 +15,8 @@ public class DatosEstado
     public int desbloqueados;       // bits: un 1 en la posición de cada cultivo que ya se obtuvo
     public int cultivoSeleccionado;
     public float segundosBonus;
+    public int heno;                // raciones de heno
+    public int edificios;           // bits: un 1 en la posición de cada Edificio comprado
 }
 
 public class EstadoJuego : MonoBehaviour
@@ -42,6 +44,7 @@ public class EstadoJuego : MonoBehaviour
     public int Monedas { get; private set; }
     public int Agua { get; private set; }
     public int Huevos { get; private set; }
+    public int Heno { get; private set; }
     public int SemillasLegendarias { get; private set; }
     public int CosechasTotales { get; private set; }
     public int CultivosEntregados { get; private set; }
@@ -63,6 +66,7 @@ public class EstadoJuego : MonoBehaviour
     readonly int[] semillasCultivo = new int[NumCultivos];
     readonly int[] cosecha = new int[NumCultivos];
     int desbloqueados;
+    int edificios;
 
     public event Action OnCambio;
 
@@ -198,6 +202,42 @@ public class EstadoJuego : MonoBehaviour
     }
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
+
+    // ---------- Heno, comida y edificios ----------
+
+    public void SumarHeno(int raciones) { Heno += raciones; OnCambio?.Invoke(); }
+
+    public bool ComprarHeno(int raciones, out int costo)
+    {
+        costo = raciones * AnimalDatos.PrecioHeno;
+        if (raciones <= 0 || Monedas < costo) return false;
+        Monedas -= costo;
+        Heno += raciones;
+        OnCambio?.Invoke();
+        return true;
+    }
+
+    public int CantidadAlimento(Alimento a)
+    {
+        if (a == Alimento.Heno) return Heno;
+        return AlimentoDatos.EsCultivo(a, out Cultivo c) ? Cosecha(c) : 0;
+    }
+
+    // Gasta una ración del alimento. Devuelve false si no hay.
+    public bool GastarAlimento(Alimento a)
+    {
+        if (a == Alimento.Heno)
+        {
+            if (Heno <= 0) return false;
+            Heno--;
+            OnCambio?.Invoke();
+            return true;
+        }
+        return AlimentoDatos.EsCultivo(a, out Cultivo c) && GastarCosecha(c);
+    }
+
+    public bool TieneEdificio(Edificio e) { return (edificios & (1 << (int)e)) != 0; }
+    public void MarcarEdificio(Edificio e) { edificios |= 1 << (int)e; OnCambio?.Invoke(); }
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
 
@@ -225,7 +265,9 @@ public class EstadoJuego : MonoBehaviour
             cosecha = (int[])cosecha.Clone(),
             desbloqueados = desbloqueados,
             cultivoSeleccionado = (int)CultivoSeleccionado,
-            segundosBonus = SegundosRestantesBonus
+            segundosBonus = SegundosRestantesBonus,
+            heno = Heno,
+            edificios = edificios
         };
     }
 
@@ -239,6 +281,8 @@ public class EstadoJuego : MonoBehaviour
         Monedas = d.monedas;
         Agua = d.agua;
         Huevos = d.huevos;
+        Heno = d.heno;
+        edificios = d.edificios;
         SemillasLegendarias = d.semillas;
         CosechasTotales = d.cosechados;
         CultivosEntregados = d.entregados;
