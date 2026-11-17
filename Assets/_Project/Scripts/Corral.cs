@@ -17,6 +17,7 @@ public class DatosAnimal
     public int puesto;
     public int variante;      // 0 = normal; 1 = gallina2 / cuy mostaza
     public float faltaLibre;  // segundos que le faltan para poder entrar en celo otra vez
+    public bool principal;    // es la gallina del tutorial (solo se usa dentro de la caja de pedidos)
 }
 
 // Estado de un corral para la partida guardada.
@@ -151,7 +152,15 @@ public class Corral : MonoBehaviour
     // Crías que pueden haber nacido aquí.
     public int MaxCrias { get { return AnimalDatos.MaxCrias(especie); } }
     // Plazas sin animal (compras y crías comparten el mismo total: una cría puede ocupar una plaza de compra libre).
-    public int PlazasLibres { get { return Mathf.Max(0, Capacidad + MaxCrias - animales.Count); } }
+    // Los animales que están en la caja de pedidos siguen guardando su plaza (para poder devolverlos).
+    public int PlazasLibres
+    {
+        get
+        {
+            PedidosCaja.EnCaja(especie, out int c, out int n, out _);
+            return Mathf.Max(0, Capacidad + MaxCrias - animales.Count - c - n);
+        }
+    }
 
     int Principal { get { return (gallinaPrincipal != null && gallinaPrincipal.EnGallinero) ? 1 : 0; } }
     public int Cantidad { get { return animales.Count + Principal; } }
@@ -162,7 +171,8 @@ public class Corral : MonoBehaviour
     {
         get
         {
-            int n = 0;
+            PedidosCaja.EnCaja(especie, out int enCaja, out _, out _);
+            int n = enCaja;
             foreach (var a in animales) if (a != null && !a.Nacido) n++;
             return n;
         }
@@ -172,18 +182,20 @@ public class Corral : MonoBehaviour
     {
         get
         {
-            int n = 0;
+            PedidosCaja.EnCaja(especie, out _, out int enCaja, out _);
+            int n = enCaja;
             foreach (var a in animales) if (a != null && a.Nacido) n++;
             return n;
         }
     }
 
-    // Gallos del gallinero, contando los pollitos que lo serán.
+    // Gallos del gallinero, contando los pollitos que lo serán (y los que están en la caja de pedidos).
     public int Gallos
     {
         get
         {
-            int n = 0;
+            PedidosCaja.EnCaja(especie, out _, out _, out int enCaja);
+            int n = enCaja;
             foreach (var a in animales) if (a != null && a.Tipo == Animal.Gallo) n++;
             return n;
         }
@@ -1428,6 +1440,128 @@ public class Corral : MonoBehaviour
         return visual;
     }
 
+    // ---------- Animales para los pedidos de la caja ----------
+
+    static bool EsAdulto(AnimalVisual v, Animal tipo)
+    {
+        return v != null && !v.Cria && v.Tipo == tipo;
+    }
+
+    // Adultos de ese tipo que hay en el corral (sin contar los que están en la caja de pedidos).
+    // La gallina del tutorial cuenta como una gallina adulta más (mientras viva en el gallinero y sea adulta).
+    bool PrincipalAdulta(Animal tipo)
+    {
+        return tipo == Animal.Gallina && especie == Animal.Gallina
+            && gallinaPrincipal != null && gallinaPrincipal.EnGallinero && gallinaPrincipal.EsAdulta;
+    }
+
+    // Lo mismo, pero libre: no está comiendo, ni con su pareja, ni en la rampa.
+    bool PrincipalLibre(Animal tipo)
+    {
+        return PrincipalAdulta(tipo) && gallinaPrincipal.DisponibleParaCriar;
+    }
+
+    public int Adultos(Animal tipo)
+    {
+        int n = PrincipalAdulta(tipo) ? 1 : 0;
+        foreach (var v in animales) if (EsAdulto(v, tipo)) n++;
+        return n;
+    }
+
+    // Adultos que se pueden llevar a la caja ahora: no están comiendo, ni con su pareja, ni en la rampa.
+    public int AdultosLibres(Animal tipo)
+    {
+        int n = PrincipalLibre(tipo) ? 1 : 0;
+        foreach (var v in animales) if (Elegible(v, tipo)) n++;
+        return n;
+    }
+
+    static bool Elegible(AnimalVisual v, Animal tipo)
+    {
+        return EsAdulto(v, tipo) && !v.Comiendo && !v.Ocupado && !v.EnRampa;
+    }
+
+    // Saca un adulto del corral para ponerlo en la caja de pedidos y devuelve sus datos (para devolverlo igual).
+    public bool TomarAdulto(Animal tipo, out DatosAnimal datos)
+    {
+        datos = null;
+        AnimalVisual elegido = null;
+        for (int i = animales.Count - 1; i >= 0; i--)
+            if (Elegible(animales[i], tipo)) { elegido = animales[i]; break; }
+
+        // Si no queda otra gallina libre, se lleva la del tutorial.
+        if (elegido == null)
+        {
+            if (!PrincipalLibre(tipo)) return false;
+            datos = new DatosAnimal { principal = true, tienePuesto = false };
+            gallinaPrincipal.GuardarEnCaja();
+            return true;
+        }
+
+        datos = new DatosAnimal
+        {
+            cria = false,
+            gallo = elegido.Tipo == Animal.Gallo,
+            nacido = elegido.Nacido,
+            raciones = elegido.Raciones,
+            variante = elegido.Variante,
+            tienePuesto = false
+        };
+
+        animales.Remove(elegido);
+        elegido.Detener();
+        elegido.enabled = false;
+        Destroy(elegido.gameObject);
+        return true;
+    }
+
+    // Devuelve al corral un animal que estaba en la caja. False si ya no hay un puesto libre.
+    public bool DevolverAdulto(Animal tipo, DatosAnimal datos)
+    {
+        if (datos == null) return false;
+
+        // La gallina del tutorial vuelve a su sitio sin ocupar una plaza de las demás.
+        if (datos.principal)
+        {
+            if (gallinaPrincipal == null) return false;
+            gallinaPrincipal.VolverDeCaja();
+            return true;
+        }
+
+        if (PuestoLibre() < 0) return false;
+        var v = CrearAnimal(tipo, false, datos.nacido, -1, null, 0f, datos.raciones, datos.variante);
+        if (v == null) return false;
+        v.Aparecer();
+        return true;
+    }
+
+    // Modelo, giro de corrección y tamaño (en el mundo) de un adulto, para dibujarlo dentro de la caja.
+    public bool ModeloAdulto(Animal tipo, int variante, int raciones,
+                             out GameObject prefab, out Quaternion correccion, out float tamanoMundo)
+    {
+        bool sinCorreccion = false;
+        if (tipo == Animal.Gallo && modeloGallo != null) prefab = modeloGallo;
+        else if (tipo == Animal.Gallina && variante == 1 && modeloGallina2 != null)
+        {
+            prefab = modeloGallina2;
+            sinCorreccion = true;
+        }
+        else prefab = modeloAnimal;
+
+        float tam = tamanoAnimal;
+        if (tipo == Animal.Gallo) tam *= escalaGallo;
+        if (AnimalDatos.Engorda(tipo)) tam *= AnimalDatos.FactorEngorde(raciones);
+        tamanoMundo = tam * transform.lossyScale.x;
+        correccion = Quaternion.Euler(rotacionExtra) * AnimalDatos.Correccion(tipo, sinCorreccion);
+        return prefab != null;
+    }
+
+    // Pinta de mostaza al cuy de la variante (lo mismo que hace CrearAnimal).
+    public void AplicarVariante(Transform contenedor, Animal tipo, int variante)
+    {
+        if (tipo == Animal.Cuy && variante == 1) VarianteVisual.Colorear(contenedor, colorVariante);
+    }
+
     // ---------- Comprar ----------
 
     public static bool PuedeComprar(Animal a, out string motivo)
@@ -1463,9 +1597,9 @@ public class Corral : MonoBehaviour
             motivo = "Ya compraste el máximo de este corral (" + corral.Capacidad + " animales).";
             return false;
         }
-        if (corral.PuestoLibre() < 0)
+        if (corral.PuestoLibre() < 0 || corral.PlazasLibres <= 0)
         {
-            motivo = "El corral está lleno: las crías ocupan las plazas libres.";
+            motivo = "El corral está lleno: las crías y los animales de la caja de pedidos ocupan las plazas libres.";
             return false;
         }
         return true;
@@ -1691,7 +1825,7 @@ public class Corral : MonoBehaviour
         if (v.Cria || !PuedeCriarEspecie(v)) return "";
         double ahora = RelojReal.Ahora;
         if (ahora < v.LibreDesde) return " Está descansando: aún no entrará en celo.";
-        if (PuestoLibre() < 0) return " El corral está lleno: no hay plaza para una cría.";
+        if (PuestoLibre() < 0 || PlazasLibres <= 0) return " El corral está lleno: no hay plaza para una cría.";
 
         v.EnCelo = true;
         v.FinCelo = ahora + Mathf.Max(1f, segundosCelo);
@@ -1728,7 +1862,7 @@ public class Corral : MonoBehaviour
         }
 
         if (criando || modeloAnimal == null) return;
-        if (PuestoLibre() < 0)
+        if (PuestoLibre() < 0 || PlazasLibres <= 0)
         {
             foreach (var v in animales) if (v != null) v.EnCelo = false;
             return;
@@ -1837,7 +1971,7 @@ public class Corral : MonoBehaviour
 
             // 4. Nace la cría, al lado y a la altura del suelo de sus padres.
             int puesto = PuestoLibre();
-            if (puesto < 0) yield break;
+            if (puesto < 0 || PlazasLibres <= 0) yield break;
 
             Animal tipoCria = ElegirTipoCria();
             var av = objetivo as AnimalVisual;

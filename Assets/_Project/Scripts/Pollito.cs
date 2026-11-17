@@ -83,7 +83,9 @@ public class Pollito : MonoBehaviour
             if (gallina != null) gallina.Retirar();
         }
 
-        bool visible = modoPrueba || (mision.PollitoVisible && !retirado);
+        // Dentro de la caja de pedidos no se ve (la caja dibuja su propio modelo).
+        bool enCaja = gallina != null && gallina.EnCaja;
+        bool visible = (modoPrueba || (mision.PollitoVisible && !retirado)) && !enCaja;
         if (visible != visual.activeSelf)
         {
             visual.SetActive(visible);
@@ -97,7 +99,9 @@ public class Pollito : MonoBehaviour
             if (gallina != null)
             {
                 gallina.Restaurar(juego.PolloAdulto);
-                gallina.enabled = true;
+                // Si se guardó la partida con ella dentro de la caja de pedidos, sigue ahí.
+                if (PedidosCaja.PrincipalEnCaja()) gallina.GuardarEnCaja();
+                else gallina.enabled = true;
             }
             else transform.localPosition = PosicionGallinero();
         }

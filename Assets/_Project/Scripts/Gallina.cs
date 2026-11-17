@@ -66,6 +66,8 @@ public class Gallina : MonoBehaviour, IReproductor
     int pendientes;
     double inicioComer;   // hora real (RelojReal.Ahora) en que empezó a comer
 
+    bool enCaja;             // está dentro de la caja de pedidos (sigue existiendo, pero oculta y quieta)
+
     static Gallina activa;
     static DatosGallina pendiente;   // datos cargados, a la espera de que la gallina se coloque en el gallinero
 
@@ -107,7 +109,7 @@ public class Gallina : MonoBehaviour, IReproductor
 
     public static DatosGallina Exportar()
     {
-        if (activa != null && activa.enabled) return activa.Crear();
+        if (activa != null && (activa.enabled || activa.enCaja)) return activa.Crear();
         return pendiente ?? new DatosGallina();
     }
 
@@ -356,9 +358,39 @@ public class Gallina : MonoBehaviour, IReproductor
         }
     }
 
+    // ---------- Caja de pedidos (la gallina del tutorial es un animal más) ----------
+
+    public bool EnCaja { get { return enCaja; } }
+
+    // La caja de pedidos se la lleva: se queda quieta y oculta (conserva sus huevos y su estado).
+    public void GuardarEnCaja()
+    {
+        StopAllCoroutines();
+        ocupada = false;
+        reservada = false;
+        moviendoPropio = false;
+        moviendoExterno = false;
+        saltando = false;
+        arriba = false;
+        enCaja = true;
+        enabled = false;
+    }
+
+    // Vuelve de la caja al corral, en su primer puesto.
+    public void VolverDeCaja()
+    {
+        enCaja = false;
+        arriba = false;
+        transform.localPosition = (puestos != null && puestos.Length > 0)
+            ? Local(puestos[0])
+            : Local(puntoGallinero);
+        enabled = true;
+    }
+
     // Se llama cuando el animal se vende: detiene todo y oculta el huevo.
     public void Retirar()
     {
+        enCaja = false;
         StopAllCoroutines();
         pendiente = null;
         ocupada = false;

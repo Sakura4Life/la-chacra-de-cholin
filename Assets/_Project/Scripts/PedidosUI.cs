@@ -237,17 +237,28 @@ public class PedidosUI : MonoBehaviour
         if (caja == null) return;
         var linea = caja.Pedido.lineas[indice];
         int n = caja.Llenar(indice);
-        mensaje.text = n > 0
-            ? $"Pusiste {n} de {EstadoJuego.NombreProducto(linea.P)} en la caja."
-            : $"No tienes {EstadoJuego.NombreProducto(linea.P)} para poner.";
+        bool animal = PedidoAnimales.EsAnimal(linea.P, out _);
+        string nombre = EstadoJuego.NombreProducto(linea.P);
+        if (n > 0)
+            mensaje.text = animal ? $"Pusiste {n} {nombre} en la caja." : $"Pusiste {n} de {nombre} en la caja.";
+        else
+            mensaje.text = animal
+                ? $"No tienes {nombre} libres: están comiendo, con su pareja, en la rampa o son crías."
+                : $"No tienes {nombre} para poner.";
     }
 
     void Quitar(int indice)
     {
         if (caja == null) return;
         var linea = caja.Pedido.lineas[indice];
+        int pedidos = linea.cargado;
         int n = caja.Quitar(indice);
-        mensaje.text = n > 0 ? $"Devolviste {n} de {EstadoJuego.NombreProducto(linea.P)} a tu inventario." : "";
+        bool animal = PedidoAnimales.EsAnimal(linea.P, out _);
+        string nombre = EstadoJuego.NombreProducto(linea.P);
+        if (n > 0)
+            mensaje.text = animal ? $"Devolviste {n} {nombre} al corral." : $"Devolviste {n} de {nombre} a tu inventario.";
+        else
+            mensaje.text = animal && pedidos > 0 ? $"No hay sitio en el corral para devolver {nombre}." : "";
     }
 
     void Entregar()
@@ -297,7 +308,7 @@ public class PedidosUI : MonoBehaviour
             ? "Cierra el panel: la caja se llevará el pedido y llegará uno nuevo."
             : pedido.tutorial
                 ? "Pedido de la pizarra: llena la línea con tus cosechas y entrégalo."
-                : "Llena cada línea con tus cosechas y entrega el pedido completo.";
+                : "Llena cada línea con tus cosechas, huevos y animales adultos, y entrega el pedido completo.";
 
         botonEntregar.interactable = !pedido.entregado && caja.TodoLleno;
         textoEntregar.text = pedido.entregado ? "Entregado" : "Entregar";
