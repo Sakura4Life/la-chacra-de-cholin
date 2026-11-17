@@ -2,7 +2,34 @@ using System;
 using UnityEngine;
 
 // Los productos nuevos van al final para no alterar los valores ya guardados.
-public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria, Maiz, Arroz, Papa }
+// AnimalGallina, AnimalGallo y AnimalCuy solo existen en los pedidos de la caja (animales adultos vivos).
+public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria, Maiz, Arroz, Papa, AnimalGallina, AnimalGallo, AnimalCuy }
+
+// Pasa entre el Animal de un corral y su Producto de pedido.
+public static class PedidoAnimales
+{
+    public static bool EsAnimal(Producto p, out Animal a)
+    {
+        switch (p)
+        {
+            case Producto.AnimalGallina: a = Animal.Gallina; return true;
+            case Producto.AnimalGallo: a = Animal.Gallo; return true;
+            case Producto.AnimalCuy: a = Animal.Cuy; return true;
+            default: a = Animal.Gallina; return false;
+        }
+    }
+
+    public static Producto De(Animal a)
+    {
+        switch (a)
+        {
+            case Animal.Gallina: return Producto.AnimalGallina;
+            case Animal.Gallo: return Producto.AnimalGallo;
+            case Animal.Cuy: return Producto.AnimalCuy;
+            default: return Producto.Ninguno;
+        }
+    }
+}
 
 [Serializable]
 public class DatosEstado
@@ -94,6 +121,7 @@ public class EstadoJuego : MonoBehaviour
     public static string NombreProducto(Producto p)
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.Plural(c);
+        if (PedidoAnimales.EsAnimal(p, out Animal animal)) return AnimalDatos.Plural(animal);
         switch (p)
         {
             case Producto.Huevo: return "huevos";
@@ -241,6 +269,14 @@ public class EstadoJuego : MonoBehaviour
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
 
+    // La gallina del tutorial se va en un pedido: queda como si la hubieras vendido.
+    public void EntregarPrincipal()
+    {
+        TienePollo = false;
+        PolloVendido = true;
+        OnCambio?.Invoke();
+    }
+
     // ---------- Guardado ----------
 
     public void MarcarPolloAdulto() { PolloAdulto = true; OnCambio?.Invoke(); }
@@ -328,10 +364,17 @@ public class EstadoJuego : MonoBehaviour
     public int Cantidad(Producto p)
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return Cosecha(c);
+        if (PedidoAnimales.EsAnimal(p, out Animal animal))
+        {
+            // Animales adultos del corral que están libres (no comiendo, ni con pareja, ni en la rampa).
+            var corral = Corral.De(animal);
+            return corral != null ? corral.AdultosLibres(animal) : 0;
+        }
         switch (p)
         {
             case Producto.Huevo: return Huevos;
-            case Producto.Pollo: return TienePollo ? 1 : 0;
+            // Si la gallina del tutorial está dentro de la caja de pedidos, no se puede vender en la tienda.
+            case Producto.Pollo: return TienePollo && !PedidosCaja.PrincipalEnCaja() ? 1 : 0;
             case Producto.SemillaLegendaria: return SemillasLegendarias;
             default: return 0;
         }
@@ -340,6 +383,7 @@ public class EstadoJuego : MonoBehaviour
     public int PrecioBase(Producto p)
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.PrecioVenta(c);
+        if (PedidoAnimales.EsAnimal(p, out Animal animal)) return AnimalDatos.PrecioVenta(animal);
         switch (p)
         {
             case Producto.Huevo: return precioHuevo;
@@ -364,6 +408,8 @@ public class EstadoJuego : MonoBehaviour
     // El pollo se vende de a uno. Devuelve las monedas ganadas y, en 'vendidas', cuántas unidades salieron.
     public int VenderCantidad(Producto p, int cantidad, out int vendidas)
     {
+        // Los animales solo se entregan en pedidos: esta venta no los toca.
+        if (PedidoAnimales.EsAnimal(p, out _)) { vendidas = 0; return 0; }
         vendidas = Mathf.Clamp(cantidad, 0, Cantidad(p));
         if (p == Producto.Pollo) vendidas = Mathf.Min(vendidas, 1);
         if (vendidas <= 0) return 0;
