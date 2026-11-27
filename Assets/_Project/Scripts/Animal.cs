@@ -4,7 +4,8 @@ using UnityEngine;
 // Gallo no tiene corral propio: vive en el gallinero (ver EspecieCorral).
 public enum Animal { Gallina, Cuy, Cerdo, Llama, Vaca, Gallo }
 public enum Alimento { Heno, Maiz, Tomate, Papa, Arroz }
-public enum Edificio { CriaderoCuy }
+// Los valores se guardan como bits: los nuevos van siempre al final.
+public enum Edificio { CriaderoCuy, Ampliacion }
 
 // Datos de cada especie. Los precios y tiempos son de prueba (se afinan en el balance final).
 public static class AnimalDatos
@@ -185,9 +186,48 @@ public static class AlimentoDatos
     }
 }
 
+// Datos de cada edificio de la tienda. Los precios son de prueba (se afinan en el balance final).
 public static class EdificioDatos
 {
-    public static string Nombre(Edificio e) { return "Criadero de cuy"; }
-    public static int Precio(Edificio e) { return 40; }
+    public static string Nombre(Edificio e)
+    {
+        switch (e)
+        {
+            case Edificio.Ampliacion: return "Ampliación de granja";
+            default: return "Criadero de cuy";
+        }
+    }
+
+    public static int Precio(Edificio e)
+    {
+        switch (e)
+        {
+            case Edificio.Ampliacion: return 80;
+            default: return 40;
+        }
+    }
+
+    // Lo que dice la tienda debajo del nombre.
+    public static string Descripcion(Edificio e)
+    {
+        switch (e)
+        {
+            case Edificio.Ampliacion: return "Suma terreno junto al granero para los corrales nuevos.";
+            default: return "Se coloca donde estaba el heno.";
+        }
+    }
+
+    // Mensaje al comprarlo.
+    public static string MensajeCompra(Edificio e, int precio)
+    {
+        switch (e)
+        {
+            case Edificio.Ampliacion:
+                return "¡Ampliaste la granja! Ya tienes terreno nuevo junto al granero. -" + precio + " monedas.";
+            default:
+                return "¡Compraste el " + Nombre(e).ToLower() + "! -" + precio + " monedas.";
+        }
+    }
+
     public static Animal Especie(Edificio e) { return Animal.Cuy; }
 }
