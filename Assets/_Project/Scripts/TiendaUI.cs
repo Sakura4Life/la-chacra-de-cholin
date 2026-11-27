@@ -463,12 +463,12 @@ public class TiendaUI : MonoBehaviour
                 () =>
                 {
                     var j = EstadoJuego.Instance;
-                    var m = MisionController.Instance;
                     string n = EdificioDatos.Nombre(edificio);
+                    int precio = EdificioDatos.Precio(edificio);
                     if (j != null && j.TieneEdificio(edificio)) return n + ": ya lo tienes.";
-                    if (m == null || !m.SolarLibre)
-                        return n + " (" + EdificioDatos.Precio(edificio) + " monedas): termina la misión del pollito y retira el heno para tener sitio.";
-                    return n + ": " + EdificioDatos.Precio(edificio) + " monedas. Se coloca donde estaba el heno.";
+                    if (!SolarEdificios.Disponible(edificio, out string motivo))
+                        return n + " (" + precio + " monedas): " + motivo;
+                    return n + ": " + precio + " monedas. " + EdificioDatos.Descripcion(edificio);
                 },
                 () =>
                 {
@@ -478,9 +478,7 @@ public class TiendaUI : MonoBehaviour
                 () =>
                 {
                     var j = EstadoJuego.Instance;
-                    var m = MisionController.Instance;
-                    return j != null && m != null && m.SolarLibre && !j.TieneEdificio(edificio)
-                           && SolarEdificios.Instance != null && j.Monedas >= EdificioDatos.Precio(edificio);
+                    return j != null && SolarEdificios.Disponible(edificio, out _) && j.Monedas >= EdificioDatos.Precio(edificio);
                 },
                 () => ComprarEdificio(edificio));
         }
