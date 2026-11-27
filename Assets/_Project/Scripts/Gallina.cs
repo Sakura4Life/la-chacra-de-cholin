@@ -13,7 +13,7 @@ public class DatosGallina
     public long ticks;       // hora real del guardado
 }
 
-public class Gallina : MonoBehaviour, IReproductor
+public class Gallina : MonoBehaviour, IAnimalVendible
 {
     enum Estado { Hambrienta, Comiendo }
 
@@ -362,10 +362,12 @@ public class Gallina : MonoBehaviour, IReproductor
 
     public bool EnCaja { get { return enCaja; } }
 
-    // La caja de pedidos se la lleva: se queda quieta y oculta (conserva sus huevos y su estado).
+    // La caja de pedidos se la lleva: se queda quieta y oculta (conserva sus huevos).
+    // Puede estar haciendo cualquier cosa: lo que hiciera se cancela (si estaba comiendo, no pone ese huevo).
     public void GuardarEnCaja()
     {
         StopAllCoroutines();
+        estado = Estado.Hambrienta;
         ocupada = false;
         reservada = false;
         moviendoPropio = false;
@@ -385,6 +387,29 @@ public class Gallina : MonoBehaviour, IReproductor
             ? Local(puestos[0])
             : Local(puntoGallinero);
         enabled = true;
+    }
+
+    // La venden en la tienda o se la lleva un pedido para siempre. Funciona como con cualquier otro animal:
+    // sus huevos ya puestos se quedan en el gallinero, listos para recoger.
+    public void Vender()
+    {
+        int huevos = pendientes;
+        Retirar();
+        var corral = Corral.De(Animal.Gallina);
+        if (corral != null) corral.SumarProduccion(huevos);
+        var juego = EstadoJuego.Instance;
+        if (juego != null) juego.EntregarPrincipal();
+    }
+
+    // IAnimalVendible
+    public bool EnJuego { get { return enabled; } }
+    public Animal TipoAnimal { get { return Animal.Gallina; } }
+    public bool EsAdulto { get { return adulto; } }
+
+    public DatosAnimal Sacar(bool definitivo)
+    {
+        if (definitivo) Vender(); else GuardarEnCaja();
+        return new DatosAnimal { principal = true, tienePuesto = false };
     }
 
     // Se llama cuando el animal se vende: detiene todo y oculta el huevo.
@@ -658,4 +683,4 @@ public class Gallina : MonoBehaviour, IReproductor
     {
         if (Application.isPlaying) TocarHuevo();
     }
-}
+}

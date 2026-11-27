@@ -243,7 +243,7 @@ public class PedidosUI : MonoBehaviour
             mensaje.text = animal ? $"Pusiste {n} {nombre} en la caja." : $"Pusiste {n} de {nombre} en la caja.";
         else
             mensaje.text = animal
-                ? $"No tienes {nombre} libres: están comiendo, con su pareja, en la rampa o son crías."
+                ? $"No tienes {nombre} adultos para poner (las crías no cuentan)."
                 : $"No tienes {nombre} para poner.";
     }
 

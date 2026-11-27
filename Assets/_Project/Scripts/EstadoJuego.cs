@@ -55,7 +55,6 @@ public class EstadoJuego : MonoBehaviour
 
     [Header("Precios base (provisionales). Los cultivos están en CultivoDatos")]
     [SerializeField] int precioHuevo = 8;
-    [SerializeField] int precioPollo = 50;
     [SerializeField] int precioSemilla = 40;
 
     [Header("Bonificador")]
@@ -269,7 +268,7 @@ public class EstadoJuego : MonoBehaviour
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
 
-    // La gallina del tutorial se va en un pedido: queda como si la hubieras vendido.
+    // La gallina del tutorial se va (vendida o en un pedido): Gallina.Vender() lo avisa aquí.
     public void EntregarPrincipal()
     {
         TienePollo = false;
@@ -366,15 +365,13 @@ public class EstadoJuego : MonoBehaviour
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return Cosecha(c);
         if (PedidoAnimales.EsAnimal(p, out Animal animal))
         {
-            // Animales adultos del corral que están libres (no comiendo, ni con pareja, ni en la rampa).
+            // Animales adultos del corral, estén haciendo lo que estén haciendo (incluida la gallina del tutorial).
             var corral = Corral.De(animal);
-            return corral != null ? corral.AdultosLibres(animal) : 0;
+            return corral != null ? corral.Adultos(animal) : 0;
         }
         switch (p)
         {
             case Producto.Huevo: return Huevos;
-            // Si la gallina del tutorial está dentro de la caja de pedidos, no se puede vender en la tienda.
-            case Producto.Pollo: return TienePollo && !PedidosCaja.PrincipalEnCaja() ? 1 : 0;
             case Producto.SemillaLegendaria: return SemillasLegendarias;
             default: return 0;
         }
@@ -387,7 +384,6 @@ public class EstadoJuego : MonoBehaviour
         switch (p)
         {
             case Producto.Huevo: return precioHuevo;
-            case Producto.Pollo: return precioPollo;
             case Producto.SemillaLegendaria: return precioSemilla;
             default: return 0;
         }
@@ -405,13 +401,24 @@ public class EstadoJuego : MonoBehaviour
     }
 
     // Vende hasta 'cantidad' unidades de un producto (con el bonificador si corresponde).
-    // El pollo se vende de a uno. Devuelve las monedas ganadas y, en 'vendidas', cuántas unidades salieron.
+    // Devuelve las monedas ganadas y, en 'vendidas', cuántas unidades salieron.
     public int VenderCantidad(Producto p, int cantidad, out int vendidas)
     {
-        // Los animales solo se entregan en pedidos: esta venta no los toca.
-        if (PedidoAnimales.EsAnimal(p, out _)) { vendidas = 0; return 0; }
+        // Animales adultos: salen del corral sin importar lo que estén haciendo (la gallina del tutorial es una más).
+        if (PedidoAnimales.EsAnimal(p, out Animal animal))
+        {
+            var corral = Corral.De(animal);
+            vendidas = corral != null ? corral.VenderAdultos(animal, Mathf.Max(0, cantidad)) : 0;
+            if (vendidas <= 0) return 0;
+
+            int totalAnimales = vendidas * PrecioBase(p) * Multiplicador(p);
+            Monedas += totalAnimales;
+            OnCambio?.Invoke();
+            Guardado.GuardarAhora();
+            return totalAnimales;
+        }
+
         vendidas = Mathf.Clamp(cantidad, 0, Cantidad(p));
-        if (p == Producto.Pollo) vendidas = Mathf.Min(vendidas, 1);
         if (vendidas <= 0) return 0;
 
         int total = vendidas * PrecioBase(p) * Multiplicador(p);
@@ -422,7 +429,6 @@ public class EstadoJuego : MonoBehaviour
             switch (p)
             {
                 case Producto.Huevo: Huevos -= vendidas; break;
-                case Producto.Pollo: TienePollo = false; PolloVendido = true; break;
                 case Producto.SemillaLegendaria: SemillasLegendarias -= vendidas; break;
             }
         }
@@ -458,7 +464,7 @@ public class EstadoJuego : MonoBehaviour
     public bool ActivarBonus(Producto p, out string motivo)
     {
         motivo = "";
-        bool valido = p == Producto.Huevo || p == Producto.Pollo || CultivoDatos.EsCultivo(p, out _);
+        bool valido = p == Producto.Huevo || CultivoDatos.EsCultivo(p, out _);
         if (!valido)
         {
             motivo = "Ese producto no admite bonificador.";

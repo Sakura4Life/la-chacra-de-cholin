@@ -5,7 +5,7 @@ using UnityEngine;
 // Un animal dentro de su corral: lo crea Corral por código. Come, pasea por el corral esquivando a los demás,
 // entra en celo, se empareja, crece (si es cría y entonces sigue a uno de sus padres), engorda (cuy, cerdo)...
 // Todo el movimiento se hace en coordenadas locales del corral, así que sigue bien si se mueve o escala la granja.
-public class AnimalVisual : MonoBehaviour, IReproductor
+public class AnimalVisual : MonoBehaviour, IAnimalVendible
 {
     public Corral Corral { get; private set; }
     public Animal Tipo { get; private set; }          // lo que es (o será, si es cría)
@@ -35,6 +35,28 @@ public class AnimalVisual : MonoBehaviour, IReproductor
     // IReproductor
     public Transform Cuerpo { get { return transform; } }
     public bool Arriba { get { return EnRampa; } }
+    public bool EnJuego { get { return enabled; } }
+
+    // IAnimalVendible
+    public Animal TipoAnimal { get { return Tipo; } }
+    public bool EsAdulto { get { return !Cria; } }
+
+    // Lo vende la tienda o se lo lleva un pedido: sale del corral sin importar lo que estuviera haciendo
+    // (comer, emparejarse, la rampa...). Devuelve sus datos para poder devolverlo igual a la caja.
+    public DatosAnimal Sacar(bool definitivo)
+    {
+        var datos = new DatosAnimal
+        {
+            cria = false,
+            gallo = Tipo == Animal.Gallo,
+            nacido = Nacido,
+            raciones = Raciones,
+            variante = Variante,
+            tienePuesto = false
+        };
+        Corral.Quitar(this);
+        return datos;
+    }
 
     // Segundos que lleva creciendo (solo crías).
     public float Crecido

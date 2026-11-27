@@ -18,6 +18,9 @@ public class DatosAnimal
     public int variante;      // 0 = normal; 1 = gallina2 / cuy mostaza
     public float faltaLibre;  // segundos que le faltan para poder entrar en celo otra vez
     public bool principal;    // es la gallina del tutorial (solo se usa dentro de la caja de pedidos)
+
+    // ¿Gasta una plaza de compra o de crías del corral? La gallina del tutorial tiene la suya aparte.
+    public bool OcupaPlaza { get { return !principal; } }
 }
 
 // Estado de un corral para la partida guardada.
@@ -1442,77 +1445,78 @@ public class Corral : MonoBehaviour
 
     // ---------- Animales para los pedidos de la caja ----------
 
-    static bool EsAdulto(AnimalVisual v, Animal tipo)
+    // Todos los adultos de ese tipo, estén haciendo lo que estén haciendo, en el orden en que salen: se sacan desde
+    // el final, así que la gallina del tutorial (que va primero) es la última en irse. La gallina del tutorial es
+    // un animal más: aquí no hay nada propio de ella. No cuenta lo que está dentro de la caja de pedidos.
+    List<IAnimalVendible> AdultosDe(Animal tipo)
     {
-        return v != null && !v.Cria && v.Tipo == tipo;
-    }
-
-    // Adultos de ese tipo que hay en el corral (sin contar los que están en la caja de pedidos).
-    // La gallina del tutorial cuenta como una gallina adulta más (mientras viva en el gallinero y sea adulta).
-    bool PrincipalAdulta(Animal tipo)
-    {
-        return tipo == Animal.Gallina && especie == Animal.Gallina
-            && gallinaPrincipal != null && gallinaPrincipal.EnGallinero && gallinaPrincipal.EsAdulta;
-    }
-
-    // Lo mismo, pero libre: no está comiendo, ni con su pareja, ni en la rampa.
-    bool PrincipalLibre(Animal tipo)
-    {
-        return PrincipalAdulta(tipo) && gallinaPrincipal.DisponibleParaCriar;
+        var lista = new List<IAnimalVendible>();
+        if (gallinaPrincipal != null) lista.Add(gallinaPrincipal);
+        foreach (var v in animales) if (v != null) lista.Add(v);
+        lista.RemoveAll(a => !a.EnJuego || !a.EsAdulto || a.TipoAnimal != tipo);
+        return lista;
     }
 
     public int Adultos(Animal tipo)
     {
-        int n = PrincipalAdulta(tipo) ? 1 : 0;
-        foreach (var v in animales) if (EsAdulto(v, tipo)) n++;
-        return n;
+        return AdultosDe(tipo).Count;
     }
 
-    // Adultos que se pueden llevar a la caja ahora: no están comiendo, ni con su pareja, ni en la rampa.
-    public int AdultosLibres(Animal tipo)
-    {
-        int n = PrincipalLibre(tipo) ? 1 : 0;
-        foreach (var v in animales) if (Elegible(v, tipo)) n++;
-        return n;
-    }
-
-    static bool Elegible(AnimalVisual v, Animal tipo)
-    {
-        return EsAdulto(v, tipo) && !v.Comiendo && !v.Ocupado && !v.EnRampa;
-    }
-
-    // Saca un adulto del corral para ponerlo en la caja de pedidos y devuelve sus datos (para devolverlo igual).
-    public bool TomarAdulto(Animal tipo, out DatosAnimal datos)
+    // Saca un adulto del corral sin importar lo que esté haciendo (comer, emparejarse, subir la rampa...).
+    // definitivo = se vende; si no, va a la caja de pedidos y 'datos' sirve para devolverlo igual.
+    bool SacarAdulto(Animal tipo, bool definitivo, out DatosAnimal datos)
     {
         datos = null;
-        AnimalVisual elegido = null;
-        for (int i = animales.Count - 1; i >= 0; i--)
-            if (Elegible(animales[i], tipo)) { elegido = animales[i]; break; }
+        var lista = AdultosDe(tipo);
+        if (lista.Count == 0) return false;
 
-        // Si no queda otra gallina libre, se lleva la del tutorial.
-        if (elegido == null)
-        {
-            if (!PrincipalLibre(tipo)) return false;
-            datos = new DatosAnimal { principal = true, tienePuesto = false };
-            gallinaPrincipal.GuardarEnCaja();
-            return true;
-        }
+        var elegido = lista[lista.Count - 1];
 
-        datos = new DatosAnimal
-        {
-            cria = false,
-            gallo = elegido.Tipo == Animal.Gallo,
-            nacido = elegido.Nacido,
-            raciones = elegido.Raciones,
-            variante = elegido.Variante,
-            tienePuesto = false
-        };
+        // Las crías que lo seguían se buscan otro padre.
+        Transform cuerpo = elegido.Cuerpo;
+        foreach (var a in animales) if (a != null && a.Padre == cuerpo) a.Padre = null;
 
-        animales.Remove(elegido);
-        elegido.Detener();
-        elegido.enabled = false;
-        Destroy(elegido.gameObject);
+        datos = elegido.Sacar(definitivo);
         return true;
+    }
+
+    // Saca un adulto para ponerlo en la caja de pedidos y devuelve sus datos (para devolverlo igual).
+    public bool TomarAdulto(Animal tipo, out DatosAnimal datos)
+    {
+        return SacarAdulto(tipo, false, out datos);
+    }
+
+    // Vende hasta 'cantidad' adultos de ese tipo (cualquiera, esté haciendo lo que esté haciendo).
+    // Devuelve cuántos vendió. Las monedas las cobra EstadoJuego.
+    public int VenderAdultos(Animal tipo, int cantidad)
+    {
+        int vendidos = 0;
+        while (vendidos < cantidad && SacarAdulto(tipo, true, out _)) vendidos++;
+        return vendidos;
+    }
+
+    // Lo llama AnimalVisual.Sacar: el animal deja el corral y se destruye, cortando lo que hiciera
+    // (si estaba emparejándose, la pareja se cancela y su compañero queda libre).
+    public void Quitar(AnimalVisual v)
+    {
+        animales.Remove(v);
+        v.Detener();
+        v.enabled = false;
+        Destroy(v.gameObject);
+    }
+
+    // Huevos que se quedan esperando en el gallinero (los que dejó una gallina que ya no está).
+    public void SumarProduccion(int n)
+    {
+        if (n <= 0) return;
+        produccion += n;
+        ActualizarIcono();
+    }
+
+    // El pedido entregó este animal: ya no vuelve al corral.
+    public void Despedir(DatosAnimal datos)
+    {
+        if (datos != null && datos.principal && gallinaPrincipal != null) gallinaPrincipal.Vender();
     }
 
     // Devuelve al corral un animal que estaba en la caja. False si ya no hay un puesto libre.
@@ -1922,10 +1926,11 @@ public class Corral : MonoBehaviour
         StartCoroutine(Criar(mover, mover == a ? b : a));
     }
 
+    // Existe y sigue en el corral (si lo vendieron o se lo llevó la caja a mitad de la pareja, se cancela).
     static bool Vivo(IReproductor r)
     {
         var o = r as Object;
-        return o != null;
+        return o != null && r.EnJuego;
     }
 
     // 'mover' camina hasta 'objetivo', se miran, saltan con corazones y nace la cría a su lado.

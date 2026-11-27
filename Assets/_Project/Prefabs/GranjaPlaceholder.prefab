@@ -7738,14 +7738,20 @@ MonoBehaviour:
   modeloHuevo: {fileID: 5418224080440429131, guid: 25903ae37c497564383eb85b0871d443, type: 3}
   tamanoModelo: 0.03
   tamanoHuevo: 0.018
+  factorTamano: 1.4
+  factorTamanoAnimal: 1.3
   modeloCaja: {fileID: 0}
-  ocupacionArea: 0.5
+  escalaCaja: 1.4
+  areaApilado: 0.75
   alturaFondo: 0.12
   alturaCaida: 0.12
   segundosCaida: 0.6
   separacionCaida: 0.12
   maxPorCultivo: 3
   maxHuevos: 2
+  maxAnimalesPorLinea: 2
+  probabilidadAnimal: 0.12
+  segundosAsentar: 0.5
   segundosSalida: 0.5
   segundosEspera: 0.6
   segundosEntrada: 0.45
