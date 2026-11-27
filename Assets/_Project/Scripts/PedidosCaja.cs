@@ -223,8 +223,8 @@ public class PedidosCaja : MonoBehaviour
             if (AnimalDatos.EspecieCorral(a) != especieCorral) continue;
             foreach (var animal in l.Animales)
             {
-                // La gallina del tutorial tiene su propia plaza: no gasta las del corral.
-                if (animal == null || animal.principal) continue;
+                // Los animales que no ocupan una plaza de compra o de crías (la gallina del tutorial) no gastan las del corral.
+                if (animal == null || !animal.OcupaPlaza) continue;
                 if (animal.nacido) nacidos++; else comprados++;
                 if (a == Animal.Gallo) gallos++;
             }
@@ -443,12 +443,17 @@ public class PedidosCaja : MonoBehaviour
         foreach (var l in pedido.lineas)
             if (CultivoDatos.EsCultivo(l.P, out _)) cultivos += l.requerido;
 
-        // Si entre los animales va la gallina del tutorial, se va con el pedido (como si la vendieras).
-        bool llevaPrincipal = PrincipalEnCaja();
-
         pedido.entregado = true;      // antes de cobrar, porque cobrar avisa a la misión
         UltimaRecompensa = monedas;
-        if (llevaPrincipal) j.EntregarPrincipal();
+
+        // Los animales entregados se van para siempre, todos igual (también la gallina del tutorial).
+        foreach (var l in pedido.lineas)
+        {
+            if (l == null || !PedidoAnimales.EsAnimal(l.P, out Animal especieLinea)) continue;
+            var corral = Corral.De(especieLinea);
+            if (corral == null) continue;
+            foreach (var animal in l.Animales) corral.Despedir(animal);
+        }
         j.CobrarPedido(monedas, cultivos);
         OnCambio?.Invoke();
         Ajustes.Vibrar();

@@ -48,7 +48,8 @@ public class TiendaUI : MonoBehaviour
         public Producto producto;
         public Cultivo cultivo;
         public bool compra;     // true = compra de semillas
-        public bool unica;      // true = se vende de a una unidad (pollo, semilla legendaria)
+        public bool unica;      // true = se vende de a una unidad (semilla legendaria)
+        public bool confirmar;  // true = pide tocar dos veces seguidas para vender (semilla legendaria y animales)
         public TMP_Text etiqueta, cantidad, accion;
         public Button menos, mas, max, boton;
     }
@@ -289,7 +290,11 @@ public class TiendaUI : MonoBehaviour
     // Fila de venta o de compra: etiqueta arriba; abajo, [-] n [+] [Máx] y el botón de acción.
     Fila CrearFila(Producto p, Cultivo c, bool compra, bool unica)
     {
-        var fila = new Fila { producto = p, cultivo = c, compra = compra, unica = unica };
+        var fila = new Fila
+        {
+            producto = p, cultivo = c, compra = compra, unica = unica,
+            confirmar = unica || PedidoAnimales.EsAnimal(p, out _)
+        };
 
         var rt = Hijo((compra ? "Compra_" : "Venta_") + (compra ? c.ToString() : p.ToString()), contenido);
         var fondo = rt.gameObject.AddComponent<Image>();
@@ -349,14 +354,24 @@ public class TiendaUI : MonoBehaviour
 
     static bool Conocido(EstadoJuego j, Cultivo c) { return j.Desbloqueado(c) || j.Cosecha(c) > 0; }
 
-    List<Producto> ProductosVisibles(EstadoJuego j, bool incluirSemilla)
+    // paraVender = true: lista de la pestaña Vender (con animales adultos y semilla legendaria).
+    // false: lista de la pestaña Bonus (solo cultivos y huevos).
+    List<Producto> ProductosVisibles(EstadoJuego j, bool paraVender)
     {
         var lista = new List<Producto>();
         foreach (var c in CultivoDatos.Todos)
             if (Conocido(j, c)) lista.Add(CultivoDatos.ProductoDe(c));
         lista.Add(Producto.Huevo);
-        if (j.TienePollo) lista.Add(Producto.Pollo);
-        if (incluirSemilla && j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
+        if (paraVender)
+        {
+            // Animales adultos de cada corral (la gallina del tutorial cuenta como una gallina más).
+            foreach (var a in AnimalDatos.Disponibles)
+            {
+                var corral = Corral.De(a);
+                if (corral != null && corral.Adultos(a) > 0) lista.Add(PedidoAnimales.De(a));
+            }
+            if (j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
+        }
         return lista;
     }
 
@@ -387,7 +402,7 @@ public class TiendaUI : MonoBehaviour
             case Pestana.Vender:
                 foreach (var p in ProductosVisibles(j, true))
                 {
-                    bool unica = p == Producto.Pollo || p == Producto.SemillaLegendaria;
+                    bool unica = p == Producto.SemillaLegendaria;
                     CrearFila(p, Cultivo.Maiz, false, unica);
                 }
                 break;
@@ -572,6 +587,7 @@ public class TiendaUI : MonoBehaviour
     {
         var j = EstadoJuego.Instance;
         if (j == null) return;
+        pendiente = Producto.Ninguno;   // cambiar la cantidad anula la confirmación de venta
         FijarCantidad(f, Mathf.Clamp(Cantidad(f) + delta, 1, Tope(j, f)));
         Refrescar();
     }
@@ -580,6 +596,7 @@ public class TiendaUI : MonoBehaviour
     {
         var j = EstadoJuego.Instance;
         if (j == null) return;
+        pendiente = Producto.Ninguno;
         FijarCantidad(f, Tope(j, f));
         Refrescar();
     }
@@ -595,15 +612,19 @@ public class TiendaUI : MonoBehaviour
         if (j == null) return;
         Producto p = f.producto;
 
-        // El pollo y la semilla legendaria piden confirmación: tocar dos veces seguidas.
-        if (f.unica)
+        bool esAnimal = PedidoAnimales.EsAnimal(p, out _);
+
+        // La semilla legendaria y los animales piden confirmación: tocar dos veces seguidas.
+        if (f.confirmar)
         {
             bool confirmando = pendiente == p && Time.unscaledTime <= vencePendiente;
             if (!confirmando)
             {
                 pendiente = p;
                 vencePendiente = Time.unscaledTime + 3f;
-                textoMensaje.text = $"Toca otra vez para vender: {EstadoJuego.NombreProducto(p)}.";
+                textoMensaje.text = f.unica
+                    ? $"Toca otra vez para vender: {EstadoJuego.NombreProducto(p)}."
+                    : $"Toca otra vez para vender {Cantidad(f)} {EstadoJuego.NombreProducto(p)}.";
                 Refrescar();
                 return;
             }
@@ -612,9 +633,12 @@ public class TiendaUI : MonoBehaviour
 
         int pedido = f.unica ? 1 : Cantidad(f);
         int total = j.VenderCantidad(p, pedido, out int vendidas);
-        textoMensaje.text = total > 0
-            ? $"Vendiste {vendidas} de {EstadoJuego.NombreProducto(p)}: +{total} monedas"
-            : "No tienes nada de eso para vender.";
+        if (total <= 0)
+            textoMensaje.text = "No tienes nada de eso para vender.";
+        else if (esAnimal)
+            textoMensaje.text = $"Vendiste {vendidas} {EstadoJuego.NombreProducto(p)}: +{total} monedas";
+        else
+            textoMensaje.text = $"Vendiste {vendidas} de {EstadoJuego.NombreProducto(p)}: +{total} monedas";
         Refrescar();
     }
 
@@ -668,10 +692,10 @@ public class TiendaUI : MonoBehaviour
     static string TituloProducto(Producto p)
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return CultivoDatos.TituloPlural(c);
+        if (PedidoAnimales.EsAnimal(p, out Animal animal)) return AnimalDatos.TituloPlural(animal) + " (adultos)";
         switch (p)
         {
             case Producto.Huevo: return "Huevos";
-            case Producto.Pollo: return "Pollo";
             case Producto.SemillaLegendaria: return "Semilla legendaria";
             default: return "";
         }
@@ -718,7 +742,8 @@ public class TiendaUI : MonoBehaviour
         f.menos.interactable = vender > 1;
         f.mas.interactable = vender < stock;
         f.max.interactable = vender < stock;
-        f.accion.text = $"Vender (+{vender * unidad})";
+        bool confirmandoVenta = f.confirmar && pendiente == p && Time.unscaledTime <= vencePendiente;
+        f.accion.text = confirmandoVenta ? $"¿Seguro? (+{vender * unidad})" : $"Vender (+{vender * unidad})";
         f.boton.interactable = stock > 0;
     }
 
@@ -738,6 +763,6 @@ public class TiendaUI : MonoBehaviour
 
         bool puede = !j.BonusActivo && j.SemillasLegendarias > 0;
         foreach (var fb in filasBonus)
-            fb.boton.interactable = puede && (fb.producto != Producto.Pollo || j.TienePollo);
+            fb.boton.interactable = puede;
     }
 }
