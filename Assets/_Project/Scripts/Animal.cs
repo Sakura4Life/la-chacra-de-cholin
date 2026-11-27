@@ -16,8 +16,10 @@ public static class AnimalDatos
     public const int MaxGallos = 2;
     // Tamaño de una cría recién nacida respecto al adulto (cuando comparte modelo con él).
     public const float EscalaCria = 0.55f;
-    // Raciones tras las que un animal que engorda llega a su tamaño máximo (el valor se usa al vender, fase 13b).
+    // Raciones tras las que un animal que engorda llega a su tamaño máximo (y a su valor máximo al venderlo).
     public const int MaxRaciones = 8;
+    // Cuánto sube el valor de venta con cada ración (7,5 % del precio base): con MaxRaciones vale x1,6.
+    public const float ValorPorRacion = 0.075f;
 
     // Especies que ya se pueden comprar (las demás llegan en fases siguientes).
     public static readonly Animal[] Disponibles = { Animal.Gallina, Animal.Gallo, Animal.Cuy };
@@ -84,6 +86,7 @@ public static class AnimalDatos
         }
     }
 
+    // Precio de un animal sin engorde (0 raciones). Lo que paga la tienda es Valor().
     public static int PrecioVenta(Animal a)
     {
         switch (a)
@@ -111,16 +114,25 @@ public static class AnimalDatos
         return (e == Animal.Gallina || e == Animal.Cuy) ? 2 : 1;
     }
 
-    // ¿Engorda al comer? (cuy y cerdo: su tamaño sube con cada ración).
+    // ¿Engorda al comer? (gallina, gallo, cuy y cerdo: su tamaño y su valor suben con cada ración).
     public static bool Engorda(Animal a)
     {
-        return a == Animal.Cuy || a == Animal.Cerdo;
+        return a == Animal.Gallina || a == Animal.Gallo || a == Animal.Cuy || a == Animal.Cerdo;
     }
 
     // Tamaño relativo según las raciones comidas (+3 % por ración, hasta MaxRaciones).
     public static float FactorEngorde(int raciones)
     {
         return 1f + 0.03f * Mathf.Min(Mathf.Max(0, raciones), MaxRaciones);
+    }
+
+    // Lo que vale un adulto al venderlo: el precio base sube un 7,5 % por cada ración comida (hasta MaxRaciones).
+    public static int Valor(Animal a, int raciones)
+    {
+        int basico = PrecioVenta(a);
+        if (!Engorda(a)) return basico;
+        int r = Mathf.Min(Mathf.Max(0, raciones), MaxRaciones);
+        return Mathf.RoundToInt(basico * (1f + ValorPorRacion * r));
     }
 
     // Segundos que tarda un animal en comer una ración.

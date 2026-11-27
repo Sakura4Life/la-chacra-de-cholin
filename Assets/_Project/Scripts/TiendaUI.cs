@@ -86,6 +86,8 @@ public class TiendaUI : MonoBehaviour
 
     Producto pendiente = Producto.Ninguno;
     float vencePendiente;
+    int animalPendiente;     // id del animal que espera la segunda pulsación para venderse (0 = ninguno)
+    float venceAnimal;
     float proximoRefresco;
 
     // ---------- Inicio ----------
@@ -137,6 +139,7 @@ public class TiendaUI : MonoBehaviour
     {
         textoMensaje.text = "";
         pendiente = Producto.Ninguno;
+        animalPendiente = 0;
         for (int i = 0; i < cantVenta.Length; i++) cantVenta[i] = 1;
         for (int i = 0; i < cantCompra.Length; i++) cantCompra[i] = 1;
         panel.SetActive(true);
@@ -146,6 +149,7 @@ public class TiendaUI : MonoBehaviour
     void Cerrar()
     {
         pendiente = Producto.Ninguno;
+        animalPendiente = 0;
         panel.SetActive(false);
     }
 
@@ -224,6 +228,7 @@ public class TiendaUI : MonoBehaviour
     {
         pestana = nueva;
         pendiente = Producto.Ninguno;
+        animalPendiente = 0;
         firma = "";   // fuerza a reconstruir la lista
         for (int i = 0; i < fondosPestana.Count; i++)
         {
@@ -354,7 +359,7 @@ public class TiendaUI : MonoBehaviour
 
     static bool Conocido(EstadoJuego j, Cultivo c) { return j.Desbloqueado(c) || j.Cosecha(c) > 0; }
 
-    // paraVender = true: lista de la pestaña Vender (con animales adultos y semilla legendaria).
+    // paraVender = true: lista de la pestaña Vender (con la semilla legendaria; los animales van aparte, uno por uno).
     // false: lista de la pestaña Bonus (solo cultivos y huevos).
     List<Producto> ProductosVisibles(EstadoJuego j, bool paraVender)
     {
@@ -362,16 +367,7 @@ public class TiendaUI : MonoBehaviour
         foreach (var c in CultivoDatos.Todos)
             if (Conocido(j, c)) lista.Add(CultivoDatos.ProductoDe(c));
         lista.Add(Producto.Huevo);
-        if (paraVender)
-        {
-            // Animales adultos de cada corral (la gallina del tutorial cuenta como una gallina más).
-            foreach (var a in AnimalDatos.Disponibles)
-            {
-                var corral = Corral.De(a);
-                if (corral != null && corral.Adultos(a) > 0) lista.Add(PedidoAnimales.De(a));
-            }
-            if (j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
-        }
+        if (paraVender && j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
         return lista;
     }
 
@@ -381,6 +377,11 @@ public class TiendaUI : MonoBehaviour
         sb.Append((int)pestana).Append(':');
         if (pestana != Pestana.Vender && pestana != Pestana.Bonus) return sb.ToString();
         foreach (var p in ProductosVisibles(j, pestana == Pestana.Vender)) sb.Append((int)p).Append(',');
+        if (pestana == Pestana.Vender)
+        {
+            sb.Append('|');
+            foreach (var a in AnimalesEnVenta()) sb.Append(a.id).Append(',');
+        }
         return sb.ToString();
     }
 
@@ -405,6 +406,7 @@ public class TiendaUI : MonoBehaviour
                     bool unica = p == Producto.SemillaLegendaria;
                     CrearFila(p, Cultivo.Maiz, false, unica);
                 }
+                CrearFilasAnimalesVenta();
                 break;
 
             case Pestana.Semillas:
@@ -430,13 +432,38 @@ public class TiendaUI : MonoBehaviour
 
     // ---------- Pestañas Edificios y Animales ----------
 
+    // compacta = texto a la izquierda y botón a la derecha, en una sola línea (lista de animales).
     FilaGen CrearFilaGen(string nombre, System.Func<string> texto, System.Func<string> textoAccion,
-                         System.Func<bool> activa, UnityAction alPulsar)
+                         System.Func<bool> activa, UnityAction alPulsar, bool compacta = false)
     {
         var fila = new FilaGen { texto = texto, textoAccion = textoAccion, activa = activa };
 
         var rt = Hijo("Gen_" + nombre, contenido);
         rt.gameObject.AddComponent<Image>().color = colorFila;
+
+        if (compacta)
+        {
+            var horizontal = rt.gameObject.AddComponent<HorizontalLayoutGroup>();
+            horizontal.padding = new RectOffset(16, 16, 10, 10);
+            horizontal.spacing = 12f;
+            horizontal.childAlignment = TextAnchor.MiddleLeft;
+            horizontal.childControlWidth = true;
+            horizontal.childControlHeight = true;
+            horizontal.childForceExpandWidth = false;
+            horizontal.childForceExpandHeight = false;
+
+            fila.etiqueta = CrearTexto(rt, "Etiqueta", 30f, TextAlignmentOptions.MidlineLeft, colorTexto);
+            var medida = fila.etiqueta.gameObject.AddComponent<LayoutElement>();
+            medida.minWidth = 0f;
+            medida.preferredWidth = 10f;
+            medida.flexibleWidth = 1f;
+            medida.preferredHeight = 90f;
+
+            fila.boton = CrearBoton(rt, "Accion", "", 340f, 90f, colorBoton, colorTextoBoton, alPulsar, out fila.accion);
+            filasGen.Add(fila);
+            return fila;
+        }
+
         var vertical = rt.gameObject.AddComponent<VerticalLayoutGroup>();
         vertical.padding = new RectOffset(16, 16, 10, 10);
         vertical.spacing = 8f;
@@ -529,6 +556,96 @@ public class TiendaUI : MonoBehaviour
         }
     }
 
+    // ---------- Venta de animales: cada adulto en su propia fila ----------
+
+    // Adultos que se pueden vender, por especie y del más gordo al más flaco (la gallina del tutorial incluida).
+    static List<AnimalEnVenta> AnimalesEnVenta()
+    {
+        var lista = new List<AnimalEnVenta>();
+        foreach (var a in AnimalDatos.Disponibles)
+        {
+            var corral = Corral.De(a);
+            if (corral != null) lista.AddRange(corral.AdultosEnVenta(a));
+        }
+        return lista;
+    }
+
+    static bool Vive(IAnimalVendible a)
+    {
+        var objeto = a as Object;
+        return objeto != null && a.EnJuego;
+    }
+
+    static int ValorVivo(AnimalEnVenta e)
+    {
+        return Vive(e.animal) ? AnimalDatos.Valor(e.animal.TipoAnimal, e.animal.Raciones) : 0;
+    }
+
+    static string TextoAnimalVenta(AnimalEnVenta e)
+    {
+        if (!Vive(e.animal)) return e.nombre + ": ya no está.";
+        int r = e.animal.Raciones;
+        string engorde = e.engorda ? "  ·  engorde " + Mathf.Min(r, AnimalDatos.MaxRaciones) + "/" + AnimalDatos.MaxRaciones : "";
+        return e.nombre + engorde + "  ·  " + AnimalDatos.Valor(e.animal.TipoAnimal, r) + " monedas";
+    }
+
+    void CrearFilasAnimalesVenta()
+    {
+        var animales = AnimalesEnVenta();
+        if (animales.Count == 0) return;
+
+        var titulo = CrearTexto(contenido, "TituloAnimales", 30f, TextAlignmentOptions.MidlineLeft, colorTexto);
+        titulo.text = "Animales adultos: cuanto más engordan, más valen. Toca dos veces el que quieras vender.";
+        titulo.gameObject.AddComponent<LayoutElement>().preferredHeight = 100f;
+
+        foreach (var info in animales)
+        {
+            var e = info;
+            CrearFilaGen("Venta_" + e.id,
+                () => TextoAnimalVenta(e),
+                () =>
+                {
+                    bool confirmando = animalPendiente == e.id && Time.unscaledTime <= venceAnimal;
+                    return (confirmando ? "¿Seguro? (+" : "Vender (+") + ValorVivo(e) + ")";
+                },
+                () => Vive(e.animal) && e.animal.EsAdulto,
+                () => VenderAnimal(e),
+                true);
+        }
+    }
+
+    // Primera pulsación: pide confirmar. Segunda (en 3 s): vende ese animal y cobra lo que vale por su engorde.
+    void VenderAnimal(AnimalEnVenta e)
+    {
+        var j = EstadoJuego.Instance;
+        if (j == null) return;
+
+        if (!Vive(e.animal))
+        {
+            textoMensaje.text = "Ese animal ya no está.";
+            Refrescar();
+            return;
+        }
+
+        bool confirmando = animalPendiente == e.id && Time.unscaledTime <= venceAnimal;
+        if (!confirmando)
+        {
+            animalPendiente = e.id;
+            venceAnimal = Time.unscaledTime + 3f;
+            pendiente = Producto.Ninguno;
+            textoMensaje.text = "Toca otra vez para vender: " + e.nombre + " (+" + ValorVivo(e) + " monedas).";
+            Refrescar();
+            return;
+        }
+
+        animalPendiente = 0;
+        int ganado = j.VenderAnimal(e.animal);
+        textoMensaje.text = ganado > 0
+            ? "Vendiste: " + e.nombre + " (+" + ganado + " monedas)."
+            : "No se pudo vender ese animal.";
+        Refrescar();
+    }
+
     void PintarGenericas()
     {
         foreach (var f in filasGen)
@@ -609,6 +726,7 @@ public class TiendaUI : MonoBehaviour
         var j = EstadoJuego.Instance;
         if (j == null) return;
         Producto p = f.producto;
+        animalPendiente = 0;
 
         bool esAnimal = PedidoAnimales.EsAnimal(p, out _);
 

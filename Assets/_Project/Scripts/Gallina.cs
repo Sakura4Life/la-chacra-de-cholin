@@ -10,6 +10,7 @@ public class DatosGallina
     public bool comiendo;
     public float comido;     // segundos que lleva comiendo
     public int pendientes;   // huevos esperando en el gallinero
+    public int raciones;     // raciones comidas siendo adulta (engorde); 0 en partidas anteriores
     public long ticks;       // hora real del guardado
 }
 
@@ -64,6 +65,8 @@ public class Gallina : MonoBehaviour, IAnimalVendible
     bool moviendoExterno;    // yendo a donde la manda el corral
     bool saltando;
     int pendientes;
+    int raciones;            // raciones comidas siendo adulta (engorde): decide cuánto vale al venderla
+    Vector3 escalaAdulta = Vector3.one;
     double inicioComer;   // hora real (RelojReal.Ahora) en que empezó a comer
 
     bool enCaja;             // está dentro de la caja de pedidos (sigue existiendo, pero oculta y quieta)
@@ -82,6 +85,7 @@ public class Gallina : MonoBehaviour, IAnimalVendible
     {
         activa = this;
         escalaPollito = modeloPollito.transform.localScale;
+        escalaAdulta = modeloGallina.transform.localScale;
         modeloPollito.SetActive(true);
         modeloGallina.SetActive(false);
         if (huevo != null) huevo.SetActive(false);
@@ -122,6 +126,7 @@ public class Gallina : MonoBehaviour, IAnimalVendible
             comiendo = comiendoAhora,
             comido = comiendoAhora ? Mathf.Max(0f, (float)(RelojReal.Ahora - inicioComer)) : 0f,
             pendientes = pendientes,
+            raciones = raciones,
             ticks = RelojReal.TicksAhora
         };
     }
@@ -131,6 +136,8 @@ public class Gallina : MonoBehaviour, IAnimalVendible
         float fuera = RelojReal.Transcurrido(d.ticks);
 
         pendientes = Mathf.Clamp(d.pendientes, 0, Corral.TopeSinCorral);
+        raciones = Mathf.Max(0, d.raciones);
+        if (adulto) AplicarEngorde();
         if (pendientes > 0) BrilloPrimerHuevo();
 
         // Si estaba comiendo, retoma desde donde iba; si el tiempo ya pasó, termina enseguida y pone el huevo.
@@ -276,6 +283,7 @@ public class Gallina : MonoBehaviour, IAnimalVendible
     {
         estado = Estado.Comiendo;
         inicioComer = RelojReal.Ahora - yaComido;
+        bool eraAdulta = adulto;    // la comida con la que crece no cuenta para el engorde
         Poner(AnimacionAve.Anim.Picotear);
 
         var tr = modeloPollito.transform;
@@ -297,6 +305,7 @@ public class Gallina : MonoBehaviour, IAnimalVendible
         }
 
         // Vuelve a tener hambre y sigue paseando; el huevo espera en el gallinero.
+        if (eraAdulta) { raciones++; AplicarEngorde(); }   // cada ración engorda, como a los demás animales
         pendientes++;
         estado = Estado.Hambrienta;
         BrilloPrimerHuevo();
@@ -330,7 +339,15 @@ public class Gallina : MonoBehaviour, IAnimalVendible
         adulto = true;
         modeloPollito.SetActive(false);
         modeloGallina.SetActive(true);
+        AplicarEngorde();
         PonerColision(radioColisionGallina);
+    }
+
+    // El engorde agranda el modelo de la gallina igual que el de los demás animales.
+    void AplicarEngorde()
+    {
+        if (modeloGallina != null)
+            modeloGallina.transform.localScale = escalaAdulta * AnimalDatos.FactorEngorde(raciones);
     }
 
     // Al cargar una partida: la deja como estaba (pollito o gallina adulta).
@@ -405,11 +422,12 @@ public class Gallina : MonoBehaviour, IAnimalVendible
     public bool EnJuego { get { return enabled; } }
     public Animal TipoAnimal { get { return Animal.Gallina; } }
     public bool EsAdulto { get { return adulto; } }
+    public int Raciones { get { return raciones; } }
 
     public DatosAnimal Sacar(bool definitivo)
     {
         if (definitivo) Vender(); else GuardarEnCaja();
-        return new DatosAnimal { principal = true, tienePuesto = false };
+        return new DatosAnimal { principal = true, tienePuesto = false, raciones = raciones };
     }
 
     // Se llama cuando el animal se vende: detiene todo y oculta el huevo.

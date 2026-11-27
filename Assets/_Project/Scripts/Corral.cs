@@ -43,6 +43,18 @@ public class InfoAnimal
     public int indice;       // -1 = la gallina principal del gallinero
 }
 
+// Un adulto que se puede vender en la tienda: la tienda los lista para elegir exactamente cuál.
+public class AnimalEnVenta
+{
+    public IAnimalVendible animal;
+    public int id;           // identificador estable mientras el animal exista
+    public int orden;        // posición en la lista del corral (desempata el orden)
+    public string nombre;    // el mismo que en la ventana de alimentar
+    public int raciones;
+    public int valor;        // lo que paga la tienda según su engorde
+    public bool engorda;
+}
+
 // Un corral: gallinero o criadero de cuy. Guarda los animales comprados y nacidos (la gallina del tutorial
 // cuenta aparte en el gallinero), deja alimentarlos, acumula lo que producen, los hace pasear sin chocar
 // y organiza las crías.
@@ -1486,13 +1498,70 @@ public class Corral : MonoBehaviour
         return SacarAdulto(tipo, false, out datos);
     }
 
-    // Vende hasta 'cantidad' adultos de ese tipo (cualquiera, esté haciendo lo que esté haciendo).
-    // Devuelve cuántos vendió. Las monedas las cobra EstadoJuego.
-    public int VenderAdultos(Animal tipo, int cantidad)
+    // Los adultos de ese tipo que se pueden vender, del más gordo al más flaco, con el mismo nombre que en la
+    // ventana de alimentar. La gallina del tutorial es una más. No cuenta lo que está dentro de la caja de pedidos.
+    public List<AnimalEnVenta> AdultosEnVenta(Animal tipo)
     {
-        int vendidos = 0;
-        while (vendidos < cantidad && SacarAdulto(tipo, true, out _)) vendidos++;
-        return vendidos;
+        var salida = new List<AnimalEnVenta>();
+        int orden = 0;
+
+        if (tipo == Animal.Gallina && gallinaPrincipal != null && gallinaPrincipal.EnJuego && gallinaPrincipal.EsAdulto)
+            salida.Add(NuevoEnVenta(gallinaPrincipal, "Gallina (la primera)", orden++));
+
+        // Misma numeración que Listar().
+        int nGallina = Principal, nGallo = 0, nOtro = 0;
+        foreach (var v in animales)
+        {
+            if (v == null || v.Cria) continue;
+            string nombre;
+            if (v.Tipo == Animal.Gallina) nombre = "Gallina " + (++nGallina);
+            else if (v.Tipo == Animal.Gallo) nombre = "Gallo " + (++nGallo);
+            else nombre = AnimalDatos.Titulo(v.Tipo) + " " + (++nOtro);
+            if (v.Tipo == tipo && v.EnJuego) salida.Add(NuevoEnVenta(v, nombre, orden++));
+        }
+
+        salida.Sort((x, y) => x.raciones != y.raciones ? y.raciones.CompareTo(x.raciones) : x.orden.CompareTo(y.orden));
+        return salida;
+    }
+
+    AnimalEnVenta NuevoEnVenta(IAnimalVendible a, string nombre, int orden)
+    {
+        var objeto = a as Object;
+        return new AnimalEnVenta
+        {
+            animal = a,
+            id = objeto != null ? objeto.GetInstanceID() : 0,
+            orden = orden,
+            nombre = nombre,
+            raciones = a.Raciones,
+            valor = AnimalDatos.Valor(a.TipoAnimal, a.Raciones),
+            engorda = AnimalDatos.Engorda(a.TipoAnimal)
+        };
+    }
+
+    // Vende a ese animal en concreto (el que el jugador eligió en la tienda), sin importar lo que estuviera
+    // haciendo (comer, emparejarse, la rampa...). Devuelve lo que vale según su engorde, o 0 si ya no se puede
+    // vender. Las monedas las cobra EstadoJuego.
+    public int VenderAnimal(IAnimalVendible elegido)
+    {
+        if (elegido == null || !elegido.EnJuego || !elegido.EsAdulto) return 0;
+
+        bool esMio = ReferenceEquals(elegido, gallinaPrincipal);
+        if (!esMio)
+        {
+            var visual = elegido as AnimalVisual;
+            esMio = visual != null && animales.Contains(visual);
+        }
+        if (!esMio) return 0;
+
+        int valor = AnimalDatos.Valor(elegido.TipoAnimal, elegido.Raciones);
+
+        // Las crías que lo seguían se buscan otro padre.
+        Transform cuerpo = elegido.Cuerpo;
+        foreach (var a in animales) if (a != null && a.Padre == cuerpo) a.Padre = null;
+
+        elegido.Sacar(true);
+        return valor;
     }
 
     // Lo llama AnimalVisual.Sacar: el animal deja el corral y se destruye, cortando lo que hiciera
@@ -1554,7 +1623,9 @@ public class Corral : MonoBehaviour
 
         float tam = tamanoAnimal;
         if (tipo == Animal.Gallo) tam *= escalaGallo;
-        if (AnimalDatos.Engorda(tipo)) tam *= AnimalDatos.FactorEngorde(raciones);
+        // La caja se dibuja como antes: las aves no se agrandan dentro de ella (solo cuy y cerdo).
+        if (AnimalDatos.Engorda(tipo) && tipo != Animal.Gallina && tipo != Animal.Gallo)
+            tam *= AnimalDatos.FactorEngorde(raciones);
         tamanoMundo = tam * transform.lossyScale.x;
         correccion = Quaternion.Euler(rotacionExtra) * AnimalDatos.Correccion(tipo, sinCorreccion);
         return prefab != null;
@@ -1675,7 +1746,9 @@ public class Corral : MonoBehaviour
             lista.Add(new InfoAnimal
             {
                 nombre = gallinaPrincipal.EsAdulta ? "Gallina (la primera)" : "Pollito",
-                estado = texto,
+                estado = gallinaPrincipal.EsAdulta
+                    ? texto + " · engorde " + Mathf.Min(gallinaPrincipal.Raciones, AnimalDatos.MaxRaciones) + "/" + AnimalDatos.MaxRaciones
+                    : texto,
                 puedeComer = puede,
                 indice = -1
             });
