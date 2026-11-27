@@ -22,6 +22,7 @@ public interface IAnimalVendible : IReproductor
 {
     Animal TipoAnimal { get; }
     bool EsAdulto { get; }
+    int Raciones { get; }      // raciones comidas (engorde): de ellas depende lo que vale al venderlo
 
     // Lo saca del corral cortando lo que estuviera haciendo y devuelve sus datos.
     // definitivo = false: va a la caja de pedidos y puede volver. definitivo = true: se vende y no vuelve.

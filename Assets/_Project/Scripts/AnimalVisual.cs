@@ -14,7 +14,7 @@ public class AnimalVisual : MonoBehaviour, IAnimalVendible
 
     public bool Cria;          // todavía no creció
     public bool Nacido;        // nació en la granja (ocupa un cupo de crías)
-    public int Raciones;       // raciones comidas (engorde)
+    public int Raciones { get; set; }   // raciones comidas (engorde)
     public int Puesto = -1;    // puesto donde apareció (también cuenta para los cupos)
     public int Variante;       // 0 = normal; 1 = otro diseño (gallina2) o color (cuy mostaza)
     public bool Reservado;     // el corral lo tiene esperando o emparejándose

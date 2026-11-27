@@ -404,19 +404,8 @@ public class EstadoJuego : MonoBehaviour
     // Devuelve las monedas ganadas y, en 'vendidas', cuántas unidades salieron.
     public int VenderCantidad(Producto p, int cantidad, out int vendidas)
     {
-        // Animales adultos: salen del corral sin importar lo que estén haciendo (la gallina del tutorial es una más).
-        if (PedidoAnimales.EsAnimal(p, out Animal animal))
-        {
-            var corral = Corral.De(animal);
-            vendidas = corral != null ? corral.VenderAdultos(animal, Mathf.Max(0, cantidad)) : 0;
-            if (vendidas <= 0) return 0;
-
-            int totalAnimales = vendidas * PrecioBase(p) * Multiplicador(p);
-            Monedas += totalAnimales;
-            OnCambio?.Invoke();
-            Guardado.GuardarAhora();
-            return totalAnimales;
-        }
+        // Los animales no se venden por cantidad: cada uno vale según su engorde (ver VenderAnimal).
+        if (PedidoAnimales.EsAnimal(p, out _)) { vendidas = 0; return 0; }
 
         vendidas = Mathf.Clamp(cantidad, 0, Cantidad(p));
         if (vendidas <= 0) return 0;
@@ -436,6 +425,22 @@ public class EstadoJuego : MonoBehaviour
         Monedas += total;
         OnCambio?.Invoke();
         return total;
+    }
+
+    // Vende un animal adulto concreto (el que eligió el jugador), esté haciendo lo que esté haciendo (la gallina
+    // del tutorial es uno más). Paga lo que vale según su engorde y guarda. Devuelve las monedas ganadas
+    // (0 si no se pudo vender).
+    public int VenderAnimal(IAnimalVendible animal)
+    {
+        if (animal == null) return 0;
+        var corral = Corral.De(animal.TipoAnimal);
+        int valor = corral != null ? corral.VenderAnimal(animal) : 0;
+        if (valor <= 0) return 0;
+
+        Monedas += valor;
+        OnCambio?.Invoke();
+        Guardado.GuardarAhora();
+        return valor;
     }
 
     // Gasta monedas (por ejemplo, al comprar una parcela). Devuelve false si no alcanzan.
