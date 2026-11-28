@@ -513,7 +513,7 @@ public class TiendaUI : MonoBehaviour
 
     void CrearFilasAnimales()
     {
-        foreach (var a in AnimalDatos.Disponibles)
+        foreach (var a in AnimalDatos.EnTienda)
         {
             Animal animal = a;
             CrearFilaGen("Animal_" + a,
@@ -562,7 +562,7 @@ public class TiendaUI : MonoBehaviour
     static List<AnimalEnVenta> AnimalesEnVenta()
     {
         var lista = new List<AnimalEnVenta>();
-        foreach (var a in AnimalDatos.Disponibles)
+        foreach (var a in AnimalDatos.EnTienda)
         {
             var corral = Corral.De(a);
             if (corral != null) lista.AddRange(corral.AdultosEnVenta(a));

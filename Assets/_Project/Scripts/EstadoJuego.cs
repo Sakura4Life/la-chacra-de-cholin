@@ -31,6 +31,9 @@ public static class PedidoAnimales
     }
 }
 
+// Avisos de Cholin que salen una sola vez en toda la partida. Se guardan como bits: los nuevos van siempre al final.
+public enum Aviso { EngordeCerdo }
+
 [Serializable]
 public class DatosEstado
 {
@@ -44,6 +47,7 @@ public class DatosEstado
     public float segundosBonus;
     public int heno;                // raciones de heno
     public int edificios;           // bits: un 1 en la posición de cada Edificio comprado
+    public int avisos;              // bits: un 1 en la posición de cada Aviso de Cholin ya mostrado
 }
 
 public class EstadoJuego : MonoBehaviour
@@ -93,6 +97,7 @@ public class EstadoJuego : MonoBehaviour
     readonly int[] cosecha = new int[NumCultivos];
     int desbloqueados;
     int edificios;
+    int avisos;
 
     public event Action OnCambio;
 
@@ -265,6 +270,16 @@ public class EstadoJuego : MonoBehaviour
 
     public bool TieneEdificio(Edificio e) { return (edificios & (1 << (int)e)) != 0; }
     public void MarcarEdificio(Edificio e) { edificios |= 1 << (int)e; OnCambio?.Invoke(); }
+
+    // Devuelve true solo la primera vez que se pide ese aviso en toda la partida (y lo deja anotado para el guardado).
+    public bool PrimeraVez(Aviso a)
+    {
+        int bit = 1 << (int)a;
+        if ((avisos & bit) != 0) return false;
+        avisos |= bit;
+        OnCambio?.Invoke();
+        return true;
+    }
     public void DarSemillaLegendaria() { SemillasLegendarias++; OnCambio?.Invoke(); }
     public void PonerPolloEnGallinero() { TienePollo = true; OnCambio?.Invoke(); }
 
@@ -302,7 +317,8 @@ public class EstadoJuego : MonoBehaviour
             cultivoSeleccionado = (int)CultivoSeleccionado,
             segundosBonus = SegundosRestantesBonus,
             heno = Heno,
-            edificios = edificios
+            edificios = edificios,
+            avisos = avisos
         };
     }
 
@@ -318,6 +334,7 @@ public class EstadoJuego : MonoBehaviour
         Huevos = d.huevos;
         Heno = d.heno;
         edificios = d.edificios;
+        avisos = d.avisos;
         SemillasLegendarias = d.semillas;
         CosechasTotales = d.cosechados;
         CultivosEntregados = d.entregados;
