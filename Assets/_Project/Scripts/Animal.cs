@@ -5,7 +5,7 @@ using UnityEngine;
 public enum Animal { Gallina, Cuy, Cerdo, Llama, Vaca, Gallo }
 public enum Alimento { Heno, Maiz, Tomate, Papa, Arroz }
 // Los valores se guardan como bits: los nuevos van siempre al final.
-public enum Edificio { CriaderoCuy, Ampliacion, CorralCerdo }
+public enum Edificio { CriaderoCuy, Ampliacion, CorralCerdo, CorralLlama }
 
 // Datos de cada especie. Los precios y tiempos son de prueba (se afinan en el balance final).
 public static class AnimalDatos
@@ -27,7 +27,7 @@ public static class AnimalDatos
     public static readonly Animal[] Disponibles = { Animal.Gallina, Animal.Gallo, Animal.Cuy };
 
     // Animales que se compran y se venden en la tienda (los de Disponibles más los grandes que ya están listos).
-    public static readonly Animal[] EnTienda = { Animal.Gallina, Animal.Gallo, Animal.Cuy, Animal.Cerdo };
+    public static readonly Animal[] EnTienda = { Animal.Gallina, Animal.Gallo, Animal.Cuy, Animal.Cerdo, Animal.Llama };
 
     // Corral grande (cerdo, llama, vaca): caben en total 4 animales, sumando los comprados y las crías.
     public const int MaxCorralGrande = 4;
@@ -169,6 +169,7 @@ public static class AnimalDatos
     {
         if (al == Alimento.Heno) return true;       // el heno lo comen todos
         if (a == Animal.Cerdo) return true;         // el cerdo come de todo: choclo, papa, tomate y arroz también
+        if (a == Animal.Llama) return al == Alimento.Maiz || al == Alimento.Papa;   // la llama: heno, choclo y papa
         // la gallina y el gallo también comen choclo
         return (a == Animal.Gallina || a == Animal.Gallo) && al == Alimento.Maiz;
     }
@@ -177,6 +178,7 @@ public static class AnimalDatos
     {
         if (a == Animal.Gallina || a == Animal.Gallo) return new[] { Alimento.Heno, Alimento.Maiz };
         if (a == Animal.Cerdo) return new[] { Alimento.Heno, Alimento.Maiz, Alimento.Papa, Alimento.Tomate, Alimento.Arroz };
+        if (a == Animal.Llama) return new[] { Alimento.Heno, Alimento.Maiz, Alimento.Papa };
         return new[] { Alimento.Heno };
     }
 }
@@ -223,6 +225,7 @@ public static class EdificioDatos
         {
             case Edificio.Ampliacion: return "Ampliación de granja";
             case Edificio.CorralCerdo: return "Corral de cerdos";
+            case Edificio.CorralLlama: return "Corral de llamas";
             default: return "Criadero de cuy";
         }
     }
@@ -233,6 +236,7 @@ public static class EdificioDatos
         {
             case Edificio.Ampliacion: return 80;
             case Edificio.CorralCerdo: return 60;
+            case Edificio.CorralLlama: return 60;
             default: return 40;
         }
     }
@@ -244,6 +248,7 @@ public static class EdificioDatos
         {
             case Edificio.Ampliacion: return "Suma terreno junto al granero para los corrales nuevos.";
             case Edificio.CorralCerdo: return "Cuatro vallas sobre el terreno nuevo. Caben 4 cerdos (comprados y crías).";
+            case Edificio.CorralLlama: return "Cuatro vallas sobre el terreno nuevo. Caben 4 llamas (compradas y crías) y dan lana.";
             default: return "Se coloca donde estaba el heno.";
         }
     }
@@ -257,13 +262,20 @@ public static class EdificioDatos
                 return "¡Ampliaste la granja! Ya tienes terreno nuevo junto al granero. -" + precio + " monedas.";
             case Edificio.CorralCerdo:
                 return "¡Compraste el corral de cerdos! Ya puedes comprar cerdos en la pestaña Animales. -" + precio + " monedas.";
+            case Edificio.CorralLlama:
+                return "¡Compraste el corral de llamas! Ya puedes comprar llamas en la pestaña Animales. -" + precio + " monedas.";
             default:
                 return "¡Compraste el " + Nombre(e).ToLower() + "! -" + precio + " monedas.";
         }
     }
 
-    public static Animal Especie(Edificio e) { return e == Edificio.CorralCerdo ? Animal.Cerdo : Animal.Cuy; }
+    public static Animal Especie(Edificio e)
+    {
+        if (e == Edificio.CorralCerdo) return Animal.Cerdo;
+        if (e == Edificio.CorralLlama) return Animal.Llama;
+        return Animal.Cuy;
+    }
 
     // Los corrales grandes se construyen sobre el terreno de la ampliación: hay que comprarla antes.
-    public static bool RequiereAmpliacion(Edificio e) { return e == Edificio.CorralCerdo; }
+    public static bool RequiereAmpliacion(Edificio e) { return e == Edificio.CorralCerdo || e == Edificio.CorralLlama; }
 }

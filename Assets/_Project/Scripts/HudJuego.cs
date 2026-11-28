@@ -52,6 +52,7 @@ public class HudJuego : MonoBehaviour
             sb.Append(CultivoDatos.TituloPlural(c)).Append(": ").Append(j.Cosecha(c)).Append("   ");
         }
         sb.Append("Huevos: ").Append(j.Huevos);
+        if (j.Lana > 0) sb.Append("   Lana: ").Append(j.Lana);
 
         if (j.Heno > 0)
             sb.Append("   Heno: ").Append(j.Heno);

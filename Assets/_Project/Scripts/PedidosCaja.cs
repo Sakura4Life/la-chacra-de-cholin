@@ -316,6 +316,7 @@ public class PedidosCaja : MonoBehaviour
             foreach (var c in CultivoDatos.Todos)
                 if (j.Desbloqueado(c)) posibles.Add(CultivoDatos.ProductoDe(c));
             if (j.PolloAdulto || j.TienePollo) posibles.Add(Producto.Huevo);
+            if (Corral.De(Animal.Llama) != null) posibles.Add(Producto.Lana);   // con el corral de llamas también piden lana
             foreach (var a in AnimalDatos.Disponibles)
             {
                 var corral = Corral.De(a);
@@ -340,7 +341,7 @@ public class PedidosCaja : MonoBehaviour
         for (int i = 0; i < posibles.Count && lineas.Count < normales; i++)
         {
             Producto p = posibles[i];
-            int tope = p == Producto.Huevo ? maxHuevos : maxPorCultivo;
+            int tope = (p == Producto.Huevo || p == Producto.Lana) ? maxHuevos : maxPorCultivo;
             lineas.Add(new LineaPedido { producto = (int)p, requerido = UnityEngine.Random.Range(1, Mathf.Max(1, tope) + 1) });
         }
 
@@ -471,6 +472,7 @@ public class PedidosCaja : MonoBehaviour
     static bool Gastar(EstadoJuego j, Producto p)
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) return j.GastarCosecha(c);
+        if (p == Producto.Lana) return j.GastarLana();
         return p == Producto.Huevo && j.GastarHuevo();
     }
 
@@ -478,6 +480,7 @@ public class PedidosCaja : MonoBehaviour
     {
         if (CultivoDatos.EsCultivo(p, out Cultivo c)) j.DevolverCosecha(c, n);
         else if (p == Producto.Huevo) j.DevolverHuevo(n);
+        else if (p == Producto.Lana) j.DevolverLana(n);
     }
 
     // ---------- Modelos dentro de la caja ----------
@@ -491,6 +494,7 @@ public class PedidosCaja : MonoBehaviour
             case Producto.Papa: return modeloPapa;
             case Producto.Arroz: return modeloArroz;
             case Producto.Huevo: return modeloHuevo;
+            case Producto.Lana: return ModeloLana.Plantilla();     // hecha con esferas de Unity (no hay modelo 3D)
             default: return null;
         }
     }
@@ -572,7 +576,7 @@ public class PedidosCaja : MonoBehaviour
         {
             GameObject modelo = ModeloDe(p);
             if (modelo == null) return false;
-            float tamano = (p == Producto.Huevo ? tamanoHuevo : tamanoModelo) * factorTamano;
+            float tamano = ((p == Producto.Huevo || p == Producto.Lana) ? tamanoHuevo : tamanoModelo) * factorTamano;
             t = ModeloUtil.CrearNormalizado(modelo, transform, tamano, "Pedido_" + modelo.name);
         }
 

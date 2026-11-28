@@ -118,13 +118,13 @@ public class Corral : MonoBehaviour
     [Tooltip("Corrales cerrados (criadero): distancia, en tamaños de animal, entre el borde del edificio (techo incluido) y el borde del cuerpo de los animales.")]
     [SerializeField] float margenParedes = 0.45f;
 
-    [Header("Producción (huevos)")]
+    [Header("Producción (huevos del gallinero o lana de las llamas)")]
     [SerializeField] GameObject modeloProduccion;
     [Tooltip("Punto del edificio sobre el que flota el icono de lo que hay para recoger.")]
     [SerializeField] Transform puntoProduccion;
     [SerializeField] Vector3 desplazamientoIcono = new Vector3(0f, 0.07f, 0f);
     [SerializeField] float tamanoProduccion = 0.025f;
-    [Tooltip("Tope único de huevos esperando en el gallinero (suma de todas las gallinas).")]
+    [Tooltip("Tope único de huevos esperando en el gallinero (suma de todas las gallinas) o de lana esperando en el corral de llamas.")]
     [SerializeField] int maxHuevos = 12;
 
     [Header("Solo edificios que se compran (criadero)")]
@@ -231,13 +231,13 @@ public class Corral : MonoBehaviour
         {
             int n = (gallinaPrincipal != null && gallinaPrincipal.EnGallinero && gallinaPrincipal.Comiendo) ? 1 : 0;
             foreach (var a in animales)
-                if (a != null && a.Tipo == Animal.Gallina && !a.Cria && a.Comiendo) n++;
+                if (a != null && (a.Tipo == Animal.Gallina || a.Tipo == Animal.Llama) && !a.Cria && a.Comiendo) n++;
             return n;
         }
     }
 
     // Tope único de huevos: los esperando más los que están por poner.
-    public bool HuevosLleno { get { return especie == Animal.Gallina && ProduccionTotal + HuevosEnCamino >= maxHuevos; } }
+    public bool HuevosLleno { get { return (especie == Animal.Gallina || especie == Animal.Llama) && ProduccionTotal + HuevosEnCamino >= maxHuevos; } }
 
     // Lo usa la gallina del tutorial para saber si puede comer.
     public static bool GallineroLleno
@@ -1689,6 +1689,7 @@ public class Corral : MonoBehaviour
         {
             if (a == Animal.Cuy) motivo = "Necesitas comprar el criadero de cuy.";
             else if (a == Animal.Cerdo) motivo = "Necesitas comprar el corral de cerdos (pestaña Edificios).";
+            else if (a == Animal.Llama) motivo = "Necesitas comprar el corral de llamas (pestaña Edificios).";
             else motivo = "Aún no tienes dónde criar " + AnimalDatos.Plural(a) + ".";
             return false;
         }
@@ -1768,9 +1769,25 @@ public class Corral : MonoBehaviour
         AlimentarUI.Abrir(this);
     }
 
+    // Corral de llamas: recoge de una vez toda la lana que esperaba.
+    bool RecogerLana()
+    {
+        int n = produccion;
+        if (n <= 0) return false;
+        produccion = 0;
+
+        ActualizarIcono();
+        var juego = EstadoJuego.Instance;
+        if (juego != null) juego.SumarLana(n);
+        Avisar(n == 1 ? "¡Recogiste una lana!" : "¡Recogiste " + n + " lanas!");
+        Guardado.GuardarAhora();
+        return true;
+    }
+
     // Recoge de una vez los huevos de todas las gallinas del gallinero.
     bool RecogerTodo()
     {
+        if (especie == Animal.Llama) return RecogerLana();
         int n = produccion;
         produccion = 0;
         if (gallinaPrincipal != null) n += gallinaPrincipal.TomarHuevos();
@@ -1831,7 +1848,8 @@ public class Corral : MonoBehaviour
             }
             else if (v.Comiendo) estado = v.EnCelo ? "comiendo... · en celo" : "comiendo...";
             else if (v.Ocupado) estado = "con su pareja";
-            else if (v.Tipo == Animal.Gallina && lleno) estado = "hay muchos huevos esperando";
+            else if ((v.Tipo == Animal.Gallina || v.Tipo == Animal.Llama) && lleno)
+                estado = v.Tipo == Animal.Llama ? "hay mucha lana esperando" : "hay muchos huevos esperando";
             else
             {
                 puede = true;
@@ -1874,9 +1892,11 @@ public class Corral : MonoBehaviour
         if (v.Cria) { mensaje = "Es una cría: crece sola."; return false; }
         if (v.Comiendo) { mensaje = "Ya está comiendo."; return false; }
         if (v.Ocupado) { mensaje = "Está ocupado ahora mismo."; return false; }
-        if (v.Tipo == Animal.Gallina && HuevosLleno)
+        if ((v.Tipo == Animal.Gallina || v.Tipo == Animal.Llama) && HuevosLleno)
         {
-            mensaje = "Hay muchos huevos esperando. Recógelos primero.";
+            mensaje = v.Tipo == Animal.Llama
+                ? "Hay mucha lana esperando. Recógela primero."
+                : "Hay muchos huevos esperando. Recógelos primero.";
             return false;
         }
 
@@ -1930,6 +1950,12 @@ public class Corral : MonoBehaviour
             produccion++;   // su lugar ya estaba reservado
             ActualizarIcono();
             Avisar("¡Una gallina puso un huevo! Toca el gallinero para recogerlo.");
+        }
+        else if (v.Tipo == Animal.Llama)
+        {
+            produccion++;   // su lugar ya estaba reservado
+            ActualizarIcono();
+            Avisar("¡La llama dio lana! Toca el corral para recogerla.");
         }
         else if (v.Tipo == Animal.Gallo)
         {
@@ -2191,7 +2217,7 @@ public class Corral : MonoBehaviour
     {
         int total = ProduccionTotal;
         mostrado = total;
-        if (modeloProduccion == null) return;
+        if (modeloProduccion == null && especie != Animal.Llama) return;   // la lana no necesita modelo: la hace ModeloLana
         if (total <= 0)
         {
             if (icono != null) icono.gameObject.SetActive(false);
@@ -2199,8 +2225,11 @@ public class Corral : MonoBehaviour
         }
 
         if (icono == null)
-            icono = IconoProduccion.Crear(this, modeloProduccion, tamanoProduccion,
+        {
+            GameObject modeloIcono = modeloProduccion != null ? modeloProduccion : ModeloLana.Plantilla();
+            icono = IconoProduccion.Crear(this, modeloIcono, tamanoProduccion,
                                           puntoProduccion != null ? puntoProduccion : transform, desplazamientoIcono);
+        }
         icono.gameObject.SetActive(true);
         icono.Fijar(total);
     }
@@ -2218,11 +2247,19 @@ public class Corral : MonoBehaviour
     {
         bool esGallinero = name.ToLower().Contains("gallinero");
         bool esCerdo = name.ToLower().Contains("cerdo");
-        especie = esGallinero ? Animal.Gallina : (esCerdo ? Animal.Cerdo : Animal.Cuy);
-        idCorral = esGallinero ? 0 : (esCerdo ? 2 : 1);
+        bool esLlama = name.ToLower().Contains("llama");
+        especie = esGallinero ? Animal.Gallina : (esCerdo ? Animal.Cerdo : (esLlama ? Animal.Llama : Animal.Cuy));
+        idCorral = esGallinero ? 0 : (esCerdo ? 2 : (esLlama ? 3 : 1));
         puestosDesdeElFinal = false;
-        ajustarModelo = !esGallinero && !esCerdo;
+        ajustarModelo = !esGallinero && !esCerdo && !esLlama;
         if (esCerdo) { tamanoAnimal = 0.09f; margenParedes = 0.25f; }
+        if (esLlama)
+        {
+            tamanoAnimal = 0.11f;
+            margenParedes = 0.25f;
+            tamanoProduccion = 0.03f;
+            desplazamientoIcono = new Vector3(0f, 0.2f, 0f);   // por encima del cuello de las llamas
+        }
 
         var propios = new List<Transform>();
         foreach (Transform h in transform)
@@ -2247,9 +2284,11 @@ public class Corral : MonoBehaviour
         string raiz = "Assets/_Project/Modelos/Animales/";
         bool gallinero = especie == Animal.Gallina;
         bool cerdo = especie == Animal.Cerdo;
-        string animal = gallinero ? raiz + "Avicola/gallina.glb" : (cerdo ? raiz + "cerdo.fbx" : raiz + "Roedor/cuy.glb");
+        bool llama = especie == Animal.Llama;
+        string animal = gallinero ? raiz + "Avicola/gallina.glb"
+            : (cerdo ? raiz + "cerdo.fbx" : (llama ? raiz + "llama.fbx" : raiz + "Roedor/cuy.glb"));
         modeloAnimal = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(animal);
-        modeloProduccion = cerdo ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/huevo.glb");
+        modeloProduccion = (cerdo || llama) ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/huevo.glb");
         modeloGallo = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/gallo.glb") : null;
         modeloGallina2 = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/gallina2.glb") : null;
         modeloCria = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/pollito.glb") : null;
