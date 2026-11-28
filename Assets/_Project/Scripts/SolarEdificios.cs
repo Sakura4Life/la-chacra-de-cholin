@@ -4,9 +4,10 @@ using UnityEngine;
 
 // El solar donde estaba el heno y el sitio de los edificios que se compran en la tienda. Va en el objeto Heno.
 // - Hace el heno tocable: al terminar la misión del pollito, Cholin pide retirarlo.
-// - Al retirarlo quedan disponibles los edificios de la tienda: el criadero de cuy y la ampliación de granja.
+// - Al retirarlo quedan disponibles los edificios de la tienda: el criadero de cuy, la ampliación de granja
+//   y los corrales grandes (estos piden haber comprado la ampliación, porque van sobre el terreno nuevo).
 // Cada edificio es un contenedor apagado en el prefab que se enciende (con rebote) al comprarlo.
-// Al añadirlo en el Inspector busca solos los objetos CriaderoCuy y Ampliacion (menú ⋮ → Reset).
+// Al añadirlo en el Inspector busca solos los objetos CriaderoCuy, Ampliacion y CorralCerdo (menú ⋮ → Reset).
 public class SolarEdificios : MonoBehaviour
 {
     public static SolarEdificios Instance { get; private set; }
@@ -18,6 +19,9 @@ public class SolarEdificios : MonoBehaviour
     [Tooltip("El contenedor del terreno nuevo junto al granero, apagado en el prefab. Se enciende al comprar la ampliación. " +
              "Su pivote debe estar en el centro del terreno nuevo (así crece desde el centro).")]
     [SerializeField] GameObject ampliacion;
+    [Tooltip("El corral de cerdos (cuatro vallas + el componente Corral), apagado en el prefab. Se enciende al comprarlo, " +
+             "y para comprarlo hay que tener la ampliación. Colócalo sobre el terreno nuevo.")]
+    [SerializeField] GameObject corralCerdo;
 
     bool henoOculto;
     readonly HashSet<Edificio> colocados = new HashSet<Edificio>();
@@ -30,6 +34,8 @@ public class SolarEdificios : MonoBehaviour
         if (t != null) criaderoCuy = t.gameObject;
         t = raiz.Find("Ampliacion");
         if (t != null) ampliacion = t.gameObject;
+        t = raiz.Find("CorralCerdo");
+        if (t != null) corralCerdo = t.gameObject;
     }
 
     GameObject Contenedor(Edificio e)
@@ -37,6 +43,7 @@ public class SolarEdificios : MonoBehaviour
         switch (e)
         {
             case Edificio.Ampliacion: return ampliacion;
+            case Edificio.CorralCerdo: return corralCerdo;
             default: return criaderoCuy;
         }
     }
@@ -94,6 +101,11 @@ public class SolarEdificios : MonoBehaviour
         if (mision == null || !mision.SolarLibre)
         {
             motivo = "Termina la misión del pollito y retira el heno para tener sitio.";
+            return false;
+        }
+        if (EdificioDatos.RequiereAmpliacion(e) && !juego.TieneEdificio(Edificio.Ampliacion))
+        {
+            motivo = "Compra primero la ampliación de granja: el corral va sobre el terreno nuevo.";
             return false;
         }
         if (solar.Contenedor(e) == null)

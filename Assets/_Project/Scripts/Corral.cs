@@ -257,6 +257,9 @@ public class Corral : MonoBehaviour
     // Texto de la tienda: cuántos se han comprado y cuántas crías hay.
     public string TextoCupo(Animal a)
     {
+        // Corral grande: los 4 lugares los comparten los comprados y las crías.
+        if (AnimalDatos.CorralGrande(especie))
+            return "corral " + (Capacidad + MaxCrias - PlazasLibres) + "/" + (Capacidad + MaxCrias);
         string corral = "corral " + Compras + "/" + Capacidad;
         if (a == Animal.Gallo) return "gallos " + Gallos + "/" + AnimalDatos.MaxGallos + "  ·  " + corral;
         return corral + (MaxCrias > 0 ? "  ·  plazas libres " + PlazasLibres : "");
@@ -266,6 +269,7 @@ public class Corral : MonoBehaviour
     {
         activos.Add(this);
         if (ajustarModelo) AjustarEdificio();
+        if (AnimalDatos.CorralGrande(especie)) CrearZonaDeToque();
         ModeloUtil.AsegurarCollider(gameObject);
         if (GetComponent<Interactuable>() == null) Interactuable.Crear(gameObject, Interactuable.Tipo.Corral);
     }
@@ -278,7 +282,9 @@ public class Corral : MonoBehaviour
         int necesarios = Capacidad + MaxCrias;
         int validos = 0;
         if (puestos != null) foreach (var p in puestos) if (p != null) validos++;
-        if (validos < necesarios)
+        // Un corral grande con vallas reparte solo a sus animales dentro de ellas aunque no tenga puestos.
+        bool conVallas = AnimalDatos.CorralGrande(especie) && LimitesRecinto(0f, out _, out _);
+        if (validos < necesarios && !conVallas)
             Debug.LogWarning("Corral '" + name + "': tiene " + validos + " puestos y necesita " + necesarios
                              + " (" + Capacidad + " de compra + " + MaxCrias + " de crías). Los que falten se repartirán en una cuadrícula.", this);
 
@@ -308,6 +314,25 @@ public class Corral : MonoBehaviour
             proximaRevision = RelojReal.Ahora + 0.4;
             GestionarCelo();
         }
+    }
+
+    // ---------- Zona de toque (corrales grandes) ----------
+
+    // Cerdo, llama y vaca: se abre la ventana de alimentar tocando en CUALQUIER parte dentro de las vallas. Una losa
+    // plana, a ras del suelo, cubre todo el interior. Los animales tienen su propio collider (más arriba), así que
+    // al tocar a uno se alimenta a ese con heno, y al tocar el suelo vacío se abre la ventana. El criadero de cuy no
+    // lleva esta zona. Si el objeto ya tiene un collider propio, no se crea nada.
+    void CrearZonaDeToque()
+    {
+        if (GetComponent<Collider>() != null) return;
+        if (!huellaLista) CalcularHuella();
+        if (!huellaValida) return;
+
+        float y = (ZonaPuestos(out _, out _, out float ys) ? ys : 0f) + alturaSueloExtra;
+        const float grosor = 0.012f;
+        var caja = gameObject.AddComponent<BoxCollider>();
+        caja.center = new Vector3((huellaMin.x + huellaMax.x) * 0.5f, y + grosor * 0.25f, (huellaMin.y + huellaMax.y) * 0.5f);
+        caja.size = new Vector3(huellaMax.x - huellaMin.x, grosor, huellaMax.y - huellaMin.y);
     }
 
     // ---------- Edificio nuevo ----------
@@ -468,6 +493,13 @@ public class Corral : MonoBehaviour
         }
         const float s = 0.06f;
         int n = Mathf.Max(0, i);
+        if (AnimalDatos.CorralGrande(especie) && LimitesRecinto(tamanoAnimal * 0.4f, out Vector2 rmin, out Vector2 rmax))
+        {
+            // Corral con vallas y sin puestos: cuadrícula de 2 x 2 repartida dentro de ellas.
+            float fx = ((n % 2) + 0.5f) / 2f, fz = (((n / 2) % 2) + 0.5f) / 2f;
+            return transform.TransformPoint(new Vector3(Mathf.Lerp(rmin.x, rmax.x, fx), alturaSueloExtra,
+                                                        Mathf.Lerp(rmin.y, rmax.y, fz)));
+        }
         return transform.TransformPoint(new Vector3(((n % 3) - 1) * s, 0f, (((n / 3) % 3) - 1) * s));
     }
 
@@ -592,7 +624,10 @@ public class Corral : MonoBehaviour
 
             Transform h = mf.transform;
             while (h.parent != null && h.parent != transform) h = h.parent;
-            if (!(h.name.StartsWith("Modelo") || h == modeloEdificio)) continue;
+            // Cuentan como edificio los hijos "Modelo...", el modeloEdificio y, en los corrales grandes, las vallas
+            // (cualquier hijo cuyo nombre empiece por "valla", con mayúsculas o sin ellas: vallaCorral, Valla1...).
+            bool esValla = h.name.StartsWith("valla", System.StringComparison.OrdinalIgnoreCase);
+            if (!(h.name.StartsWith("Modelo") || h == modeloEdificio || esValla)) continue;
 
             Bounds b = mf.sharedMesh.bounds;
             for (int i = 0; i < 8; i++)
@@ -1652,9 +1687,9 @@ public class Corral : MonoBehaviour
         var corral = De(a);
         if (corral == null)
         {
-            motivo = a == Animal.Cuy
-                ? "Necesitas comprar el criadero de cuy."
-                : "Aún no tienes dónde criar " + AnimalDatos.Plural(a) + ".";
+            if (a == Animal.Cuy) motivo = "Necesitas comprar el criadero de cuy.";
+            else if (a == Animal.Cerdo) motivo = "Necesitas comprar el corral de cerdos (pestaña Edificios).";
+            else motivo = "Aún no tienes dónde criar " + AnimalDatos.Plural(a) + ".";
             return false;
         }
         if (!corral.TieneModelo || (a == Animal.Gallo && !corral.TieneModeloGallo))
@@ -1665,6 +1700,11 @@ public class Corral : MonoBehaviour
         if (a == Animal.Gallo && corral.Gallos >= AnimalDatos.MaxGallos)
         {
             motivo = "Ya tienes el máximo de " + AnimalDatos.MaxGallos + " gallos.";
+            return false;
+        }
+        if (AnimalDatos.CorralGrande(a) && corral.PlazasLibres <= 0)
+        {
+            motivo = "El corral ya tiene sus " + (corral.Capacidad + corral.MaxCrias) + " animales (comprados y crías).";
             return false;
         }
         if (!corral.HayLugarCompra)
@@ -1695,11 +1735,19 @@ public class Corral : MonoBehaviour
         var corral = De(a);
         var visual = corral.CrearAnimal(a, false, false, -1, null, 0f, 0, corral.ElegirVariante(a));
         if (visual != null) visual.Aparecer();
+        bool primerCerdo = a == Animal.Cerdo && juego.PrimeraVez(Aviso.EngordeCerdo);
         Guardado.GuardarAhora();
 
         string nombre = AnimalDatos.Nombre(a);
         if (a == Animal.Cuy && visual != null && visual.Variante == 1) nombre = "cuy mostaza";
         mensaje = "Compraste " + (AnimalDatos.Femenino(a) ? "una " : "un ") + nombre + ": -" + precio + " monedas.";
+        if (primerCerdo)
+        {
+            // Cholin lo explica abajo (como en el tutorial) y se repite en la tienda por si la tapa.
+            const string consejo = "¡Buena compra! Mientras más coma tu cerdo, más engorda y más monedas vale al venderlo.";
+            Avisar(consejo, 8f);
+            mensaje += "\n" + consejo;
+        }
         return true;
     }
 
@@ -2157,9 +2205,9 @@ public class Corral : MonoBehaviour
         icono.Fijar(total);
     }
 
-    static void Avisar(string texto)
+    static void Avisar(string texto, float segundos = 3f)
     {
-        if (TutorialController.Instance != null) TutorialController.Instance.Avisar(texto);
+        if (TutorialController.Instance != null) TutorialController.Instance.Avisar(texto, segundos);
     }
 
     // ---------- Ayuda del editor ----------
@@ -2169,10 +2217,12 @@ public class Corral : MonoBehaviour
     void Reset()
     {
         bool esGallinero = name.ToLower().Contains("gallinero");
-        especie = esGallinero ? Animal.Gallina : Animal.Cuy;
-        idCorral = esGallinero ? 0 : 1;
+        bool esCerdo = name.ToLower().Contains("cerdo");
+        especie = esGallinero ? Animal.Gallina : (esCerdo ? Animal.Cerdo : Animal.Cuy);
+        idCorral = esGallinero ? 0 : (esCerdo ? 2 : 1);
         puestosDesdeElFinal = false;
-        ajustarModelo = !esGallinero;
+        ajustarModelo = !esGallinero && !esCerdo;
+        if (esCerdo) { tamanoAnimal = 0.09f; margenParedes = 0.25f; }
 
         var propios = new List<Transform>();
         foreach (Transform h in transform)
@@ -2196,9 +2246,10 @@ public class Corral : MonoBehaviour
     {
         string raiz = "Assets/_Project/Modelos/Animales/";
         bool gallinero = especie == Animal.Gallina;
-        string animal = gallinero ? raiz + "Avicola/gallina.glb" : raiz + "Roedor/cuy.glb";
+        bool cerdo = especie == Animal.Cerdo;
+        string animal = gallinero ? raiz + "Avicola/gallina.glb" : (cerdo ? raiz + "cerdo.fbx" : raiz + "Roedor/cuy.glb");
         modeloAnimal = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(animal);
-        modeloProduccion = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/huevo.glb");
+        modeloProduccion = cerdo ? null : UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/huevo.glb");
         modeloGallo = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/gallo.glb") : null;
         modeloGallina2 = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/gallina2.glb") : null;
         modeloCria = gallinero ? UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(raiz + "Avicola/pollito.glb") : null;

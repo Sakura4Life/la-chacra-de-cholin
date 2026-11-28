@@ -5,7 +5,7 @@ using UnityEngine;
 public enum Animal { Gallina, Cuy, Cerdo, Llama, Vaca, Gallo }
 public enum Alimento { Heno, Maiz, Tomate, Papa, Arroz }
 // Los valores se guardan como bits: los nuevos van siempre al final.
-public enum Edificio { CriaderoCuy, Ampliacion }
+public enum Edificio { CriaderoCuy, Ampliacion, CorralCerdo }
 
 // Datos de cada especie. Los precios y tiempos son de prueba (se afinan en el balance final).
 public static class AnimalDatos
@@ -22,7 +22,21 @@ public static class AnimalDatos
     public const float ValorPorRacion = 0.075f;
 
     // Especies que ya se pueden comprar (las demás llegan en fases siguientes).
+    // OJO: esta lista es la de los animales que pueden pedirse en la caja de pedidos (PedidosCaja). Los animales
+    // grandes (cerdo, llama, vaca) NO entran en pedidos, por eso se compran y venden desde EnTienda.
     public static readonly Animal[] Disponibles = { Animal.Gallina, Animal.Gallo, Animal.Cuy };
+
+    // Animales que se compran y se venden en la tienda (los de Disponibles más los grandes que ya están listos).
+    public static readonly Animal[] EnTienda = { Animal.Gallina, Animal.Gallo, Animal.Cuy, Animal.Cerdo };
+
+    // Corral grande (cerdo, llama, vaca): caben en total 4 animales, sumando los comprados y las crías.
+    public const int MaxCorralGrande = 4;
+
+    public static bool CorralGrande(Animal a)
+    {
+        Animal e = EspecieCorral(a);
+        return e == Animal.Cerdo || e == Animal.Llama || e == Animal.Vaca;
+    }
 
     public static string Nombre(Animal a)
     {
@@ -103,15 +117,15 @@ public static class AnimalDatos
     // Animales que se pueden COMPRAR para un corral (no cuenta la gallina del tutorial ni las crías).
     public static int Capacidad(Animal a)
     {
-        Animal e = EspecieCorral(a);
-        return (e == Animal.Gallina || e == Animal.Cuy) ? 4 : 2;
+        return 4;     // gallinero, criadero y corrales grandes: 4 animales comprados como máximo
     }
 
-    // Crías que puede haber nacido en el corral (cupo aparte del de compra).
+    // Crías que puede haber nacido en el corral (cupo aparte del de compra). En los corrales grandes no hay cupo
+    // aparte: los 4 lugares los comparten los animales comprados y las crías.
     public static int MaxCrias(Animal a)
     {
         Animal e = EspecieCorral(a);
-        return (e == Animal.Gallina || e == Animal.Cuy) ? 2 : 1;
+        return CorralGrande(e) ? 0 : 2;
     }
 
     // ¿Engorda al comer? (gallina, gallo, cuy y cerdo: su tamaño y su valor suben con cada ración).
@@ -154,6 +168,7 @@ public static class AnimalDatos
     public static bool Acepta(Animal a, Alimento al)
     {
         if (al == Alimento.Heno) return true;       // el heno lo comen todos
+        if (a == Animal.Cerdo) return true;         // el cerdo come de todo: choclo, papa, tomate y arroz también
         // la gallina y el gallo también comen choclo
         return (a == Animal.Gallina || a == Animal.Gallo) && al == Alimento.Maiz;
     }
@@ -161,6 +176,7 @@ public static class AnimalDatos
     public static Alimento[] Alimentos(Animal a)
     {
         if (a == Animal.Gallina || a == Animal.Gallo) return new[] { Alimento.Heno, Alimento.Maiz };
+        if (a == Animal.Cerdo) return new[] { Alimento.Heno, Alimento.Maiz, Alimento.Papa, Alimento.Tomate, Alimento.Arroz };
         return new[] { Alimento.Heno };
     }
 }
@@ -206,6 +222,7 @@ public static class EdificioDatos
         switch (e)
         {
             case Edificio.Ampliacion: return "Ampliación de granja";
+            case Edificio.CorralCerdo: return "Corral de cerdos";
             default: return "Criadero de cuy";
         }
     }
@@ -215,6 +232,7 @@ public static class EdificioDatos
         switch (e)
         {
             case Edificio.Ampliacion: return 80;
+            case Edificio.CorralCerdo: return 60;
             default: return 40;
         }
     }
@@ -225,6 +243,7 @@ public static class EdificioDatos
         switch (e)
         {
             case Edificio.Ampliacion: return "Suma terreno junto al granero para los corrales nuevos.";
+            case Edificio.CorralCerdo: return "Cuatro vallas sobre el terreno nuevo. Caben 4 cerdos (comprados y crías).";
             default: return "Se coloca donde estaba el heno.";
         }
     }
@@ -236,10 +255,15 @@ public static class EdificioDatos
         {
             case Edificio.Ampliacion:
                 return "¡Ampliaste la granja! Ya tienes terreno nuevo junto al granero. -" + precio + " monedas.";
+            case Edificio.CorralCerdo:
+                return "¡Compraste el corral de cerdos! Ya puedes comprar cerdos en la pestaña Animales. -" + precio + " monedas.";
             default:
                 return "¡Compraste el " + Nombre(e).ToLower() + "! -" + precio + " monedas.";
         }
     }
 
-    public static Animal Especie(Edificio e) { return Animal.Cuy; }
+    public static Animal Especie(Edificio e) { return e == Edificio.CorralCerdo ? Animal.Cerdo : Animal.Cuy; }
+
+    // Los corrales grandes se construyen sobre el terreno de la ampliación: hay que comprarla antes.
+    public static bool RequiereAmpliacion(Edificio e) { return e == Edificio.CorralCerdo; }
 }
