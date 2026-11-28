@@ -7,7 +7,7 @@ using UnityEngine;
 // - Al retirarlo quedan disponibles los edificios de la tienda: el criadero de cuy, la ampliación de granja
 //   y los corrales grandes (estos piden haber comprado la ampliación, porque van sobre el terreno nuevo).
 // Cada edificio es un contenedor apagado en el prefab que se enciende (con rebote) al comprarlo.
-// Al añadirlo en el Inspector busca solos los objetos CriaderoCuy, Ampliacion y CorralCerdo (menú ⋮ → Reset).
+// Al añadirlo en el Inspector busca solos los objetos CriaderoCuy, Ampliacion, CorralCerdo y CorralLlama (menú ⋮ → Reset).
 public class SolarEdificios : MonoBehaviour
 {
     public static SolarEdificios Instance { get; private set; }
@@ -22,6 +22,9 @@ public class SolarEdificios : MonoBehaviour
     [Tooltip("El corral de cerdos (cuatro vallas + el componente Corral), apagado en el prefab. Se enciende al comprarlo, " +
              "y para comprarlo hay que tener la ampliación. Colócalo sobre el terreno nuevo.")]
     [SerializeField] GameObject corralCerdo;
+    [Tooltip("El corral de llamas (cuatro vallas + el componente Corral), apagado en el prefab. Igual que el de cerdos: " +
+             "hay que tener la ampliación y va sobre el terreno nuevo, en otro sitio que el de los cerdos.")]
+    [SerializeField] GameObject corralLlama;
 
     bool henoOculto;
     readonly HashSet<Edificio> colocados = new HashSet<Edificio>();
@@ -36,6 +39,8 @@ public class SolarEdificios : MonoBehaviour
         if (t != null) ampliacion = t.gameObject;
         t = raiz.Find("CorralCerdo");
         if (t != null) corralCerdo = t.gameObject;
+        t = raiz.Find("CorralLlama");
+        if (t != null) corralLlama = t.gameObject;
     }
 
     GameObject Contenedor(Edificio e)
@@ -44,6 +49,7 @@ public class SolarEdificios : MonoBehaviour
         {
             case Edificio.Ampliacion: return ampliacion;
             case Edificio.CorralCerdo: return corralCerdo;
+            case Edificio.CorralLlama: return corralLlama;
             default: return criaderoCuy;
         }
     }

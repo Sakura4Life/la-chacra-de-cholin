@@ -3,7 +3,7 @@ using UnityEngine;
 
 // Los productos nuevos van al final para no alterar los valores ya guardados.
 // AnimalGallina, AnimalGallo y AnimalCuy solo existen en los pedidos de la caja (animales adultos vivos).
-public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria, Maiz, Arroz, Papa, AnimalGallina, AnimalGallo, AnimalCuy }
+public enum Producto { Ninguno, Tomate, Huevo, Pollo, SemillaLegendaria, Maiz, Arroz, Papa, AnimalGallina, AnimalGallo, AnimalCuy, Lana }
 
 // Pasa entre el Animal de un corral y su Producto de pedido.
 public static class PedidoAnimales
@@ -48,6 +48,7 @@ public class DatosEstado
     public int heno;                // raciones de heno
     public int edificios;           // bits: un 1 en la posición de cada Edificio comprado
     public int avisos;              // bits: un 1 en la posición de cada Aviso de Cholin ya mostrado
+    public int lana;                // lana recogida de las llamas y sin vender
 }
 
 public class EstadoJuego : MonoBehaviour
@@ -59,6 +60,7 @@ public class EstadoJuego : MonoBehaviour
 
     [Header("Precios base (provisionales). Los cultivos están en CultivoDatos")]
     [SerializeField] int precioHuevo = 8;
+    [SerializeField] int precioLana = 10;
     [SerializeField] int precioSemilla = 40;
 
     [Header("Bonificador")]
@@ -74,6 +76,7 @@ public class EstadoJuego : MonoBehaviour
     public int Monedas { get; private set; }
     public int Agua { get; private set; }
     public int Huevos { get; private set; }
+    public int Lana { get; private set; }
     public int Heno { get; private set; }
     public int SemillasLegendarias { get; private set; }
     public int CosechasTotales { get; private set; }
@@ -129,6 +132,7 @@ public class EstadoJuego : MonoBehaviour
         switch (p)
         {
             case Producto.Huevo: return "huevos";
+            case Producto.Lana: return "lana";
             case Producto.Pollo: return "pollo";
             case Producto.SemillaLegendaria: return "semilla legendaria";
             default: return "nada";
@@ -235,6 +239,19 @@ public class EstadoJuego : MonoBehaviour
 
     public void SumarHuevo() { Huevos++; OnCambio?.Invoke(); }
 
+    // Lana del corral de llamas (funciona como los huevos: se recoge, se vende y entra en pedidos).
+    public void SumarLana(int cantidad) { if (cantidad <= 0) return; Lana += cantidad; OnCambio?.Invoke(); }
+
+    public bool GastarLana()
+    {
+        if (Lana <= 0) return false;
+        Lana--;
+        OnCambio?.Invoke();
+        return true;
+    }
+
+    public void DevolverLana(int cantidad) { Lana += cantidad; OnCambio?.Invoke(); }
+
     // ---------- Heno, comida y edificios ----------
 
     public void SumarHeno(int raciones) { Heno += raciones; OnCambio?.Invoke(); }
@@ -307,6 +324,7 @@ public class EstadoJuego : MonoBehaviour
             agua = Agua,
             tomates = Cosecha(Cultivo.Tomate),
             huevos = Huevos,
+            lana = Lana,
             semillas = SemillasLegendarias,
             cosechados = CosechasTotales,
             entregados = CultivosEntregados,
@@ -332,6 +350,7 @@ public class EstadoJuego : MonoBehaviour
         Monedas = d.monedas;
         Agua = d.agua;
         Huevos = d.huevos;
+        Lana = d.lana;
         Heno = d.heno;
         edificios = d.edificios;
         avisos = d.avisos;
@@ -389,6 +408,7 @@ public class EstadoJuego : MonoBehaviour
         switch (p)
         {
             case Producto.Huevo: return Huevos;
+            case Producto.Lana: return Lana;
             case Producto.SemillaLegendaria: return SemillasLegendarias;
             default: return 0;
         }
@@ -401,6 +421,7 @@ public class EstadoJuego : MonoBehaviour
         switch (p)
         {
             case Producto.Huevo: return precioHuevo;
+            case Producto.Lana: return precioLana;
             case Producto.SemillaLegendaria: return precioSemilla;
             default: return 0;
         }
@@ -435,6 +456,7 @@ public class EstadoJuego : MonoBehaviour
             switch (p)
             {
                 case Producto.Huevo: Huevos -= vendidas; break;
+                case Producto.Lana: Lana -= vendidas; break;
                 case Producto.SemillaLegendaria: SemillasLegendarias -= vendidas; break;
             }
         }

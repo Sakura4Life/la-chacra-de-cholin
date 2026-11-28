@@ -367,6 +367,8 @@ public class TiendaUI : MonoBehaviour
         foreach (var c in CultivoDatos.Todos)
             if (Conocido(j, c)) lista.Add(CultivoDatos.ProductoDe(c));
         lista.Add(Producto.Huevo);
+        // La lana solo se vende (no admite bonificador) y aparece cuando hay corral de llamas o lana guardada.
+        if (paraVender && (j.Lana > 0 || Corral.De(Animal.Llama) != null)) lista.Add(Producto.Lana);
         if (paraVender && j.SemillasLegendarias > 0) lista.Add(Producto.SemillaLegendaria);
         return lista;
     }
@@ -812,6 +814,7 @@ public class TiendaUI : MonoBehaviour
         switch (p)
         {
             case Producto.Huevo: return "Huevos";
+            case Producto.Lana: return "Lana";
             case Producto.SemillaLegendaria: return "Semilla legendaria";
             default: return "";
         }
